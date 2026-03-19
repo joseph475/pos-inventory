@@ -29,7 +29,7 @@ const STATUS_CONFIG: Record<POStatus, { label: string; className: string }> = {
 
 interface Props {
   po: POWithRelations | null
-  userRole: "super_admin" | "manager" | "cashier"
+  userRole: "super_admin" | "manager" | "cashier" | "owner"
   onClose: () => void
   onReceive: (po: POWithRelations) => void
 }

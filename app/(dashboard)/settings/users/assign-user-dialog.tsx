@@ -208,6 +208,10 @@ const ROLE_CONFIG: Record<
     label: 'Cashier',
     className: 'bg-emerald-500/15 text-emerald-500 border-transparent',
   },
+  owner: {
+    label: 'Owner',
+    className: 'bg-amber-500/15 text-amber-500 border-transparent',
+  },
 }
 
 function getInitials(name: string | null): string {

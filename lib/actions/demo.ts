@@ -1,30 +1,33 @@
 'use server'
 
+import { clerkClient } from '@clerk/nextjs/server'
+
 type DemoRole = 'super_admin' | 'manager' | 'cashier' | 'owner'
 
-export async function getDemoCredentials(role: DemoRole) {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
+const ROLE_EMAIL: Record<DemoRole, string | undefined> = {
+  super_admin: process.env.DEMO_SUPER_ADMIN_EMAIL,
+  manager: process.env.DEMO_MANAGER_EMAIL,
+  cashier: process.env.DEMO_CASHIER_EMAIL,
+  owner: process.env.DEMO_OWNER_EMAIL,
+}
+
+export async function getDemoSignInUrl(role: DemoRole): Promise<string> {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE?.trim() !== 'true') {
     throw new Error('Demo mode is not enabled')
   }
 
-  const map: Record<DemoRole, { email: string; password: string }> = {
-    super_admin: {
-      email: process.env.DEMO_SUPER_ADMIN_EMAIL!,
-      password: process.env.DEMO_SUPER_ADMIN_PASSWORD!,
-    },
-    manager: {
-      email: process.env.DEMO_MANAGER_EMAIL!,
-      password: process.env.DEMO_MANAGER_PASSWORD!,
-    },
-    cashier: {
-      email: process.env.DEMO_CASHIER_EMAIL!,
-      password: process.env.DEMO_CASHIER_PASSWORD!,
-    },
-    owner: {
-      email: process.env.DEMO_OWNER_EMAIL!,
-      password: process.env.DEMO_OWNER_PASSWORD!,
-    },
-  }
+  const email = ROLE_EMAIL[role]?.trim()
+  if (!email) throw new Error(`Demo email not configured for role: ${role}`)
 
-  return map[role]
+  const client = await clerkClient()
+  const { data: users } = await client.users.getUserList({ emailAddress: [email] })
+  const user = users[0]
+  if (!user) throw new Error(`Demo account not found in Clerk: ${email}`)
+
+  const { token } = await client.signInTokens.createSignInToken({
+    userId: user.id,
+    expiresInSeconds: 60,
+  })
+
+  return `/sign-in?__clerk_ticket=${token}`
 }

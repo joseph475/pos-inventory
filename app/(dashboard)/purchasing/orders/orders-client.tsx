@@ -58,7 +58,7 @@ interface Props {
   branches: Array<{ id: string; name: string }>
   products: Array<{ id: string; name: string; sku: string; cost_price: number }>
   userBranchId: string | null
-  userRole: "super_admin" | "manager" | "cashier"
+  userRole: "super_admin" | "manager" | "cashier" | "owner"
   supplierNames: string[]
 }
 

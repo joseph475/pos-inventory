@@ -1,11 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { useSignIn } from '@clerk/nextjs'
-import { useRouter } from 'next/navigation'
 import { ShieldCheck, Briefcase, ShoppingCart, Loader2, Crown } from 'lucide-react'
 import { toast } from 'sonner'
-import { getDemoCredentials } from '@/lib/actions/demo'
+import { getDemoSignInUrl } from '@/lib/actions/demo'
 
 type DemoRole = 'super_admin' | 'manager' | 'cashier' | 'owner'
 
@@ -57,30 +55,14 @@ const DEMO_ROLES: {
 ]
 
 export function DemoLoginButtons() {
-  const { signIn, fetchStatus } = useSignIn()
-  const router = useRouter()
   const [loading, setLoading] = React.useState<DemoRole | null>(null)
 
   async function handleDemoLogin(role: DemoRole) {
-    if (fetchStatus !== 'idle' || loading) return
+    if (loading) return
     setLoading(role)
     try {
-      const { email, password } = await getDemoCredentials(role)
-
-      // Step 1: identify the user
-      const { error: createError } = await signIn.create({ identifier: email })
-      if (createError) throw new Error(createError.longMessage ?? createError.message)
-
-      // Step 2: submit password
-      const { error: passwordError } = await signIn.password({ password })
-      if (passwordError) throw new Error(passwordError.longMessage ?? passwordError.message)
-
-      if (signIn.status !== 'complete') {
-        throw new Error('Sign-in could not be completed (MFA or extra step required)')
-      }
-
-      // Step 3: activate session and redirect
-      await signIn.finalize({ navigate: () => router.push('/dashboard') })
+      const url = await getDemoSignInUrl(role)
+      window.location.href = url
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Demo login failed')
       setLoading(null)

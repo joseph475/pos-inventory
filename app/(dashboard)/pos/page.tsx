@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 import { useCartStore } from "@/lib/store/cart"
@@ -93,7 +92,6 @@ export default function POSPage() {
 
   const [products, setProducts] = React.useState<ProductWithStock[]>([])
   const [categories, setCategories] = React.useState<CategoryTab[]>([{ id: "all", label: "All" }])
-  const [loading, setLoading] = React.useState(true)
 
   const [search, setSearch] = React.useState("")
   const [activeCategory, setActiveCategory] = React.useState("all")
@@ -134,7 +132,6 @@ export default function POSPage() {
     let cancelled = false
 
     async function fetchProducts() {
-      setLoading(true)
       try {
         const data = await getPOSProducts(branchId)
         if (cancelled) return
@@ -148,8 +145,8 @@ export default function POSPage() {
         }
         setProducts(data)
         setCategories(categoryTabs)
-      } finally {
-        if (!cancelled) setLoading(false)
+      } catch (error) {
+        // Handle error silently or add error handling as needed
       }
     }
 
@@ -490,13 +487,7 @@ export default function POSPage() {
           {/* Product grid — adds bottom padding on mobile so FAB doesn't overlap */}
           <ScrollArea className="flex-1">
             <div className="p-3 pb-24 sm:p-4 sm:pb-24 lg:pb-4">
-              {loading ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="h-28 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : filteredProducts.length === 0 ? (
+              {filteredProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
                   <Package className="h-10 w-10 text-muted-foreground/40" />
                   <div>
