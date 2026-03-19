@@ -70,7 +70,10 @@ interface Props {
 // Component
 // ---------------------------------------------------------------------------
 export function NewPOSheet({ suppliers, branches, products, userBranchId, onSuccess }: Props) {
-  const { formatCurrency } = useCurrency()
+  const { formatCurrency, currencyCode, locale } = useCurrency()
+  const currencySymbol = new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode })
+    .formatToParts(0)
+    .find((p) => p.type === 'currency')?.value ?? currencyCode
   const [open, setOpen] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -339,7 +342,7 @@ export function NewPOSheet({ suppliers, branches, products, userBranchId, onSucc
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs">Unit Cost ($)</Label>
+                        <Label className="text-xs">Unit Cost ({currencySymbol})</Label>
                         <Input
                           type="number"
                           min={0}

@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import type { Database, InventoryMovement } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 export type MovementWithRelations = InventoryMovement & {
   products: { name: string; sku: string } | null
@@ -79,11 +80,13 @@ export async function createStockAdjustment(params: {
     })
   }
 
+  revalidateTag(CACHE_TAGS.INVENTORY, {})
+  revalidateTag(CACHE_TAGS.INVENTORY_MOVEMENTS, {})
   revalidatePath('/inventory/adjustments')
   revalidatePath('/inventory/stock')
 }
 
-// Fetch inventory movements with product + branch info
+// Fetch inventory movements with product + branch info — no cache, always fresh
 export async function getInventoryMovements(filters?: {
   branch_id?: string
   type?: string
@@ -100,7 +103,7 @@ export async function getInventoryMovements(filters?: {
       profiles(full_name)
     `)
     .order('created_at', { ascending: false })
-    .limit(100)
+    .limit(200)
 
   if (filters?.branch_id) query = query.eq('branch_id', filters.branch_id)
   if (filters?.type && filters.type !== 'all') query = query.eq('type', filters.type as any)
@@ -113,15 +116,22 @@ export async function getInventoryMovements(filters?: {
 }
 
 // Get products for a branch
+const getProductsForBranchCached = unstable_cache(
+  async (branch_id?: string) => {
+    const supabase = getAdminClient()
+    const { data } = await supabase
+      .from('products')
+      .select('id, name, sku, unit, cost_price, is_active')
+      .eq('is_active', true)
+      .order('name')
+    return data ?? []
+  },
+  ['products-branch'],
+  { tags: [CACHE_TAGS.PRODUCTS] }
+)
+
 export async function getProductsForBranch(branch_id?: string) {
-  const supabase = getAdminClient()
-  let query = supabase
-    .from('products')
-    .select('id, name, sku, unit, cost_price, is_active')
-    .eq('is_active', true)
-    .order('name')
-  const { data } = await query
-  return data ?? []
+  return getProductsForBranchCached(branch_id)
 }
 
 export type POSProduct = {
@@ -144,46 +154,54 @@ export type POSProduct = {
 }
 
 // Fetch products with branch-scoped stock for the POS
+const getPOSProductsCached = unstable_cache(
+  async (branch_id: string | null): Promise<POSProduct[]> => {
+    const supabase = getAdminClient()
+
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, inventory(quantity, branch_id), categories(id, name)')
+      .eq('is_active', true)
+      .order('name')
+
+    if (error) throw new Error(error.message)
+    if (!data) return []
+
+    return data.map((p: any) => {
+      const invArr: Array<{ quantity: number; branch_id: string }> = Array.isArray(p.inventory)
+        ? p.inventory
+        : p.inventory ? [p.inventory] : []
+
+      const relevant = branch_id
+        ? invArr.filter((inv) => inv.branch_id === branch_id)
+        : invArr
+
+      const stock = relevant.reduce((sum, inv) => sum + inv.quantity, 0)
+
+      return {
+        id: p.id,
+        org_id: p.org_id,
+        sku: p.sku,
+        barcode: p.barcode,
+        name: p.name,
+        description: p.description,
+        category_id: p.category_id,
+        category_name: p.categories?.name ?? null,
+        unit: p.unit,
+        cost_price: p.cost_price,
+        selling_price: p.selling_price,
+        image_url: p.image_url,
+        is_active: p.is_active,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+        stock,
+      }
+    })
+  },
+  ['pos-products'],
+  { tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.INVENTORY] }
+)
+
 export async function getPOSProducts(branch_id: string | null): Promise<POSProduct[]> {
-  const supabase = getAdminClient()
-
-  const { data, error } = await supabase
-    .from('products')
-    .select('*, inventory(quantity, branch_id), categories(id, name)')
-    .eq('is_active', true)
-    .order('name')
-
-  if (error) throw new Error(error.message)
-  if (!data) return []
-
-  return data.map((p: any) => {
-    const invArr: Array<{ quantity: number; branch_id: string }> = Array.isArray(p.inventory)
-      ? p.inventory
-      : p.inventory ? [p.inventory] : []
-
-    const relevant = branch_id
-      ? invArr.filter((inv) => inv.branch_id === branch_id)
-      : invArr
-
-    const stock = relevant.reduce((sum, inv) => sum + inv.quantity, 0)
-
-    return {
-      id: p.id,
-      org_id: p.org_id,
-      sku: p.sku,
-      barcode: p.barcode,
-      name: p.name,
-      description: p.description,
-      category_id: p.category_id,
-      category_name: p.categories?.name ?? null,
-      unit: p.unit,
-      cost_price: p.cost_price,
-      selling_price: p.selling_price,
-      image_url: p.image_url,
-      is_active: p.is_active,
-      created_at: p.created_at,
-      updated_at: p.updated_at,
-      stock,
-    }
-  })
+  return getPOSProductsCached(branch_id)
 }

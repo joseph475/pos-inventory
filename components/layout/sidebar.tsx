@@ -228,7 +228,7 @@ export function SidebarNav({ className, onNavigate }: SidebarNavProps) {
   return (
     <div className={cn("flex h-full flex-col", className)}>
       {/* Logo */}
-      <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
+      <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4 pl-5">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sidebar-primary">
           <Store className="h-4 w-4 text-sidebar-primary-foreground" />
         </div>

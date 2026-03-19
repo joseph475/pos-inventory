@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { Database } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 function getAdminClient() {
   return createClient<Database>(
@@ -159,5 +160,9 @@ export async function updateTransferStatus(params: {
     }
   }
 
+  if (params.status === 'completed') {
+    revalidateTag(CACHE_TAGS.INVENTORY, {})
+    revalidateTag(CACHE_TAGS.INVENTORY_MOVEMENTS, {})
+  }
   revalidatePath('/inventory/transfers')
 }

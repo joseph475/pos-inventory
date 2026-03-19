@@ -27,5 +27,10 @@ export default async function OrganizationSettingsPage() {
 
   const settings = await getOrgSettings();
 
-  return <OrganizationClient initialCurrencyCode={settings.currency_code} />;
+  return (
+    <OrganizationClient
+      initialCurrencyCode={settings.currency_code}
+      initialTaxRate={settings.tax_rate}
+    />
+  );
 }

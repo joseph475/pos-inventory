@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import type { Database } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -14,23 +15,30 @@ function getAdminClient() {
   )
 }
 
+const getOrgSettingsCached = unstable_cache(
+  async () => {
+    const supabase = getAdminClient()
+    const { data } = await supabase
+      .from('organizations')
+      .select('currency_code, currency_locale, tax_rate')
+      .eq('id', ORG_ID)
+      .single()
+    return data ?? { currency_code: 'USD', currency_locale: 'en-US', tax_rate: 0.12 }
+  },
+  ['org-settings'],
+  { tags: [CACHE_TAGS.ORG_SETTINGS] }
+)
+
 export async function getOrgSettings() {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
-
-  const supabase = getAdminClient()
-  const { data } = await supabase
-    .from('organizations')
-    .select('currency_code, currency_locale')
-    .eq('id', ORG_ID)
-    .single()
-
-  return data ?? { currency_code: 'USD', currency_locale: 'en-US' }
+  return getOrgSettingsCached()
 }
 
 export async function updateOrgSettings(settings: {
   currency_code: string
   currency_locale: string
+  tax_rate: number
 }) {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
@@ -52,5 +60,6 @@ export async function updateOrgSettings(settings: {
 
   if (updateError) throw new Error(updateError.message)
 
+  revalidateTag(CACHE_TAGS.ORG_SETTINGS, {})
   revalidatePath('/settings/organization')
 }

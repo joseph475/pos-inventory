@@ -12,6 +12,7 @@ import {
 import { SidebarNav } from "@/components/layout/sidebar";
 import { UserProfileProvider } from "@/lib/context/user-profile";
 import { CurrencyProvider } from "@/lib/context/currency";
+import { TaxRateSync } from "@/lib/context/tax-rate-sync";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -22,21 +23,25 @@ function getAdminClient() {
   );
 }
 
-async function ensureProfile(userId: string) {
+type ProfileWithBranch = {
+  profile: import("@/types/database").Profile;
+  branch: import("@/types/database").Branch | null;
+} | null;
+
+async function ensureProfile(userId: string): Promise<ProfileWithBranch> {
   const supabase = getAdminClient();
 
   const { data: existing } = await supabase
     .from("profiles")
-    .select("id, role, branch_id, branches(name)")
+    .select("*, branches(*)")
     .eq("clerk_user_id", userId)
     .single();
 
   if (existing) {
-    return existing as {
-      id: string;
-      role: string;
-      branch_id: string | null;
-      branches: { name: string } | null;
+    const { branches, ...profileRow } = existing as any;
+    return {
+      profile: profileRow as import("@/types/database").Profile,
+      branch: (branches ?? null) as import("@/types/database").Branch | null,
     };
   }
 
@@ -65,16 +70,15 @@ async function ensureProfile(userId: string) {
   // Re-fetch in case the webhook already created it
   const { data: created } = await supabase
     .from("profiles")
-    .select("id, role, branch_id, branches(name)")
+    .select("*, branches(*)")
     .eq("clerk_user_id", userId)
     .single();
 
   if (created) {
-    return created as {
-      id: string;
-      role: string;
-      branch_id: string | null;
-      branches: { name: string } | null;
+    const { branches, ...profileRow } = created as any;
+    return {
+      profile: profileRow as import("@/types/database").Profile,
+      branch: (branches ?? null) as import("@/types/database").Branch | null,
     };
   }
   return null;
@@ -93,22 +97,24 @@ export default async function DashboardLayout({
     ensureProfile(userId),
     supabase
       .from("organizations")
-      .select("currency_code, currency_locale")
+      .select("currency_code, currency_locale, tax_rate")
       .eq("id", "00000000-0000-0000-0000-000000000001")
       .single(),
   ]);
 
-  const isSuperAdmin = profile?.role === "super_admin";
+  const isSuperAdmin = profile?.profile?.role === "super_admin";
   const branchLabel = isSuperAdmin
     ? "All Branches"
-    : (profile?.branches?.name ?? "No Branch");
+    : (profile?.branch?.name ?? "No Branch");
 
   const currencyCode = orgData.data?.currency_code ?? "USD";
   const currencyLocale = orgData.data?.currency_locale ?? "en-US";
+  const taxRate = orgData.data?.tax_rate ?? 0.12;
 
   return (
-    <CurrencyProvider currencyCode={currencyCode} locale={currencyLocale}>
-    <UserProfileProvider>
+    <CurrencyProvider currencyCode={currencyCode} locale={currencyLocale} taxRate={taxRate}>
+    <TaxRateSync />
+    <UserProfileProvider initialProfile={profile?.profile ?? null} initialBranch={profile?.branch ?? null}>
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Desktop sidebar */}
         <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">

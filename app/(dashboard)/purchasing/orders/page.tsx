@@ -14,18 +14,20 @@ function getAdminClient() {
 export default async function PurchaseOrdersPage() {
   const { userId } = await auth()
 
-  // Resolve user's branch
+  // Resolve user's branch and role
   let userBranchId: string | null = null
+  let userRole: "super_admin" | "manager" | "cashier" = "cashier"
 
   if (userId) {
     const supabase = getAdminClient()
     const { data: profile } = await supabase
       .from("profiles")
-      .select("branch_id")
+      .select("branch_id, role")
       .eq("clerk_user_id", userId)
       .single()
 
     userBranchId = profile?.branch_id ?? null
+    userRole = profile?.role ?? "cashier"
   }
 
   // Fetch all data in parallel
@@ -37,22 +39,16 @@ export default async function PurchaseOrdersPage() {
   ])
 
   // Map PO rows
-  const orderRows = orders.map((o) => {
-    const supplier = o.suppliers as { name: string } | null
-    const branch = o.branches as { name: string } | null
-    const creator = o.profiles as { full_name: string } | null
-    const items = o.purchase_order_items as Array<{ id: string }> | null
-    return {
-      id: o.id,
-      supplier: supplier?.name ?? "Unknown supplier",
-      branch: branch?.name ?? "Unknown branch",
-      status: o.status,
-      items: items?.length ?? 0,
-      total: o.total,
-      created_by: creator?.full_name ?? "—",
-      created_at: o.created_at,
-    }
-  })
+  const orderRows = orders.map((o) => ({
+    id: o.id,
+    supplier: o.suppliers?.name ?? "Unknown supplier",
+    branch: o.branches?.name ?? "Unknown branch",
+    status: o.status,
+    items: o.purchase_order_items.length,
+    total: o.total,
+    created_by: o.profiles?.full_name ?? "—",
+    created_at: o.created_at,
+  }))
 
   const productList = products.map((p) => ({
     id: p.id,
@@ -67,10 +63,12 @@ export default async function PurchaseOrdersPage() {
   return (
     <OrdersClient
       initialOrders={orderRows}
+      fullOrders={orders}
       suppliers={suppliers}
       branches={branches}
       products={productList}
       userBranchId={userBranchId}
+      userRole={userRole}
       supplierNames={supplierNames}
     />
   )

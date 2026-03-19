@@ -15,6 +15,7 @@ import {
   Package,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,7 +63,7 @@ function StockBadge({ stock }: { stock: number }) {
 
 export default function POSPage() {
   const { profile, loading: profileLoading } = useUserProfile()
-  const { formatCurrency } = useCurrency()
+  const { formatCurrency, taxRate } = useCurrency()
   const branchId = profile?.branch_id ?? null
 
   const {
@@ -88,6 +89,9 @@ export default function POSPage() {
   const tabsScrollRef = React.useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = React.useState(false)
   const [canScrollRight, setCanScrollRight] = React.useState(false)
+
+  // Mobile cart drawer state
+  const [cartOpen, setCartOpen] = React.useState(false)
 
   function updateScrollState() {
     const el = tabsScrollRef.current
@@ -115,9 +119,7 @@ export default function POSPage() {
   }, [discount])
 
   React.useEffect(() => {
-    // Wait until profile has loaded before fetching
     if (profileLoading) return
-
     let cancelled = false
 
     async function fetchProducts() {
@@ -125,8 +127,6 @@ export default function POSPage() {
       try {
         const data = await getPOSProducts(branchId)
         if (cancelled) return
-
-        // Derive unique categories from products
         const seenIds = new Set<string>()
         const categoryTabs: CategoryTab[] = [{ id: "all", label: "All" }]
         for (const p of data) {
@@ -135,7 +135,6 @@ export default function POSPage() {
             categoryTabs.push({ id: p.category_id, label: p.category_name })
           }
         }
-
         setProducts(data)
         setCategories(categoryTabs)
       } finally {
@@ -199,18 +198,237 @@ export default function POSPage() {
     },
   ]
 
+  // Shared cart panel content
+  const cartPanel = (
+    <div className="flex flex-col h-full">
+      {/* Cart Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">
+            Current Order
+          </span>
+          {itemCount > 0 && (
+            <Badge className="h-5 min-w-5 justify-center px-1.5 text-xs">
+              {itemCount}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {items.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={clearCart}
+              aria-label="Clear cart"
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          {/* Close button — mobile only */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setCartOpen(false)}
+            aria-label="Close cart"
+            className="lg:hidden text-muted-foreground"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Cart items */}
+      {items.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <ShoppingCart className="h-12 w-12 text-muted-foreground/30" />
+          <div>
+            <p className="text-sm font-medium text-foreground">Cart is empty</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Click a product to add it
+            </p>
+          </div>
+        </div>
+      ) : (
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-0 divide-y divide-border">
+            {items.map((item) => {
+              const itemTotal = item.unit_price * item.quantity - item.discount_amount
+              return (
+                <div key={item.product.id} className="flex flex-col gap-2 px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="flex-1 text-sm font-medium leading-snug text-foreground">
+                      {item.product.name}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => removeItem(item.product.id)}
+                      aria-label={`Remove ${item.product.name}`}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Quantity controls */}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantity}
+                        onChange={(e) => handleQuantityInput(item.product.id, e)}
+                        className="h-6 w-12 px-1 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                        aria-label="Increase quantity"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        {formatCurrency(item.unit_price)} each
+                      </span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatCurrency(itemTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </ScrollArea>
+      )}
+
+      {/* Totals + Payment section */}
+      <div className="shrink-0 border-t border-border">
+        {/* Totals */}
+        <div className="space-y-2 px-4 py-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span>{formatCurrency(subtotal())}</span>
+          </div>
+
+          {/* Discount row */}
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="shrink-0 text-muted-foreground">Discount</span>
+            <div className="flex items-center gap-1.5">
+              <div className="relative w-20">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  placeholder="0"
+                  value={discountInput}
+                  onChange={handleDiscountChange}
+                  className="h-6 pr-6 text-right text-sm"
+                />
+                <Percent className="pointer-events-none absolute inset-y-0 right-1.5 my-auto h-3 w-3 text-muted-foreground" />
+              </div>
+              {totalDiscount() > 0 && (
+                <span className="text-destructive">
+                  −{formatCurrency(totalDiscount())}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              Tax ({Math.round(taxRate * 10000) / 100}%)
+            </span>
+            <span>{formatCurrency(tax())}</span>
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <span className="text-base font-semibold">Total</span>
+            <span className="text-xl font-bold text-foreground">
+              {formatCurrency(total())}
+            </span>
+          </div>
+        </div>
+
+        {/* Payment method selector */}
+        <div className="px-4 pb-3">
+          <div className="grid grid-cols-3 gap-1.5">
+            {paymentMethods.map((method) => (
+              <button
+                key={method.value}
+                onClick={() => setPaymentMethod(method.value)}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-all",
+                  paymentMethod === method.value
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    : "border-border bg-background text-muted-foreground hover:border-ring/50 hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {method.icon}
+                {method.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex flex-col gap-2 px-4 pb-4">
+          <Button
+            size="lg"
+            className="h-10 w-full text-sm font-semibold"
+            disabled={items.length === 0}
+            onClick={() => {
+              setPaymentDialogOpen(true)
+              setCartOpen(false)
+            }}
+          >
+            Process Payment
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full text-sm"
+            disabled={items.length === 0}
+            onClick={() => {
+              setHoldDialogOpen(true)
+              setCartOpen(false)
+            }}
+          >
+            Hold Order
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <>
-      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+      <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden">
         {/* LEFT PANEL: Products */}
         <div className="flex flex-1 flex-col overflow-hidden border-r border-border">
           {/* Search bar */}
-          <div className="shrink-0 border-b border-border p-4">
+          <div className="shrink-0 border-b border-border p-3 sm:p-4">
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute inset-y-0 left-2.5 my-auto h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search products, SKU or scan barcode…"
+                  placeholder="Search products or scan barcode…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-8"
@@ -258,9 +476,9 @@ export default function POSPage() {
             </Tabs>
           </div>
 
-          {/* Product grid */}
+          {/* Product grid — adds bottom padding on mobile so FAB doesn't overlap */}
           <ScrollArea className="flex-1">
-            <div className="p-4">
+            <div className="p-3 pb-24 sm:p-4 sm:pb-24 lg:pb-4">
               {loading ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                   {Array.from({ length: 8 }).map((_, i) => (
@@ -315,201 +533,72 @@ export default function POSPage() {
           </ScrollArea>
         </div>
 
-        {/* RIGHT PANEL: Cart */}
-        <div className="flex w-96 shrink-0 flex-col bg-card">
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+        {/* RIGHT PANEL: Cart — desktop sidebar */}
+        <div className="hidden lg:flex lg:w-96 lg:shrink-0 lg:flex-col bg-card">
+          {cartPanel}
+        </div>
+      </div>
+
+      {/* ── Mobile cart bottom sheet ───────────────────────────────────────────── */}
+
+      {/* Backdrop */}
+      {cartOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setCartOpen(false)}
+        />
+      )}
+
+      {/* Bottom sheet */}
+      <div
+        className={cn(
+          "fixed inset-x-0 bottom-0 z-50 flex flex-col bg-card shadow-2xl lg:hidden",
+          "rounded-t-2xl border-t border-border",
+          "transition-transform duration-300 ease-in-out",
+          "h-[85dvh]",
+          cartOpen ? "translate-y-0" : "translate-y-full"
+        )}
+      >
+        {/* Drag handle */}
+        <div className="flex shrink-0 justify-center pt-2 pb-1">
+          <div className="h-1 w-10 rounded-full bg-border" />
+        </div>
+        {cartPanel}
+      </div>
+
+      {/* Mobile FAB — view cart button */}
+      <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden">
+        <div className="border-t border-border bg-background/95 backdrop-blur px-4 py-3 safe-area-pb">
+          <button
+            onClick={() => setCartOpen(true)}
+            className={cn(
+              "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-semibold transition-all",
+              itemCount > 0
+                ? "bg-primary text-primary-foreground shadow-md active:scale-[0.98]"
+                : "bg-muted text-muted-foreground cursor-default"
+            )}
+            disabled={itemCount === 0}
+          >
             <div className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold text-foreground">
-                Current Order
-              </span>
-              {itemCount > 0 && (
-                <Badge className="h-5 min-w-5 justify-center px-1.5 text-xs">
-                  {itemCount}
-                </Badge>
+              <ShoppingCart className="h-4 w-4" />
+              {itemCount > 0 ? (
+                <span>
+                  View Cart
+                  <span className="ml-1.5 rounded-full bg-primary-foreground/20 px-1.5 py-0.5 text-xs">
+                    {itemCount}
+                  </span>
+                </span>
+              ) : (
+                <span>Cart is empty</span>
               )}
             </div>
-            {items.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={clearCart}
-                aria-label="Clear cart"
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+            {itemCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span>{formatCurrency(total())}</span>
+                <ChevronUp className="h-4 w-4 opacity-70" />
+              </div>
             )}
-          </div>
-
-          {/* Cart items */}
-          {items.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-              <ShoppingCart className="h-12 w-12 text-muted-foreground/30" />
-              <div>
-                <p className="text-sm font-medium text-foreground">Cart is empty</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Click a product to add it
-                </p>
-              </div>
-            </div>
-          ) : (
-            <ScrollArea className="flex-1">
-              <div className="space-y-0 divide-y divide-border">
-                {items.map((item) => {
-                  const itemTotal = item.unit_price * item.quantity - item.discount_amount
-                  return (
-                    <div key={item.product.id} className="flex flex-col gap-2 px-4 py-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="flex-1 text-sm font-medium leading-snug text-foreground">
-                          {item.product.name}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => removeItem(item.product.id)}
-                          aria-label={`Remove ${item.product.name}`}
-                          className="shrink-0 text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        {/* Quantity controls */}
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="icon-xs"
-                            onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                            aria-label="Decrease quantity"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) => handleQuantityInput(item.product.id, e)}
-                            className="h-6 w-12 px-1 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <Button
-                            variant="outline"
-                            size="icon-xs"
-                            onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                            aria-label="Increase quantity"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-xs text-muted-foreground">
-                            {formatCurrency(item.unit_price)} each
-                          </span>
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatCurrency(itemTotal)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </ScrollArea>
-          )}
-
-          {/* Totals + Payment section */}
-          <div className="shrink-0 border-t border-border">
-            {/* Totals */}
-            <div className="space-y-2 px-4 py-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(subtotal())}</span>
-              </div>
-
-              {/* Discount row */}
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="shrink-0 text-muted-foreground">Discount</span>
-                <div className="flex items-center gap-1.5">
-                  <div className="relative w-20">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      placeholder="0"
-                      value={discountInput}
-                      onChange={handleDiscountChange}
-                      className="h-6 pr-6 text-right text-sm"
-                    />
-                    <Percent className="pointer-events-none absolute inset-y-0 right-1.5 my-auto h-3 w-3 text-muted-foreground" />
-                  </div>
-                  {totalDiscount() > 0 && (
-                    <span className="text-destructive">
-                      −{formatCurrency(totalDiscount())}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Tax (12%)</span>
-                <span>{formatCurrency(tax())}</span>
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <span className="text-base font-semibold">Total</span>
-                <span className="text-xl font-bold text-foreground">
-                  {formatCurrency(total())}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment method selector */}
-            <div className="px-4 pb-3">
-              <div className="grid grid-cols-3 gap-1.5">
-                {paymentMethods.map((method) => (
-                  <button
-                    key={method.value}
-                    onClick={() => setPaymentMethod(method.value)}
-                    className={cn(
-                      "flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-all",
-                      paymentMethod === method.value
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "border-border bg-background text-muted-foreground hover:border-ring/50 hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    {method.icon}
-                    {method.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex flex-col gap-2 px-4 pb-4">
-              <Button
-                size="lg"
-                className="h-10 w-full text-sm font-semibold"
-                disabled={items.length === 0}
-                onClick={() => setPaymentDialogOpen(true)}
-              >
-                Process Payment
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full text-sm"
-                disabled={items.length === 0}
-                onClick={() => setHoldDialogOpen(true)}
-              >
-                Hold Order
-              </Button>
-            </div>
-          </div>
+          </button>
         </div>
       </div>
 

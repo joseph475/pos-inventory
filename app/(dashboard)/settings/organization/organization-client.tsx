@@ -3,9 +3,10 @@
 import * as React from "react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Globe } from "lucide-react";
+import { Globe, Percent } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,32 +43,47 @@ const CURRENCIES = [
 
 interface OrganizationClientProps {
   initialCurrencyCode: string;
+  initialTaxRate: number;
 }
 
-export function OrganizationClient({ initialCurrencyCode }: OrganizationClientProps) {
+export function OrganizationClient({ initialCurrencyCode, initialTaxRate }: OrganizationClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [selectedCode, setSelectedCode] = React.useState(initialCurrencyCode);
+  // Display as percentage string, e.g. 0.12 → "12"
+  const [taxInput, setTaxInput] = React.useState(
+    String(Math.round(initialTaxRate * 10000) / 100)
+  );
 
   const selectedCurrency = CURRENCIES.find((c) => c.code === selectedCode) ?? CURRENCIES[0];
 
+  const taxRateNum = parseFloat(taxInput);
+  const taxRateValid = !isNaN(taxRateNum) && taxRateNum >= 0 && taxRateNum <= 100;
+
+  const isDirty =
+    selectedCode !== initialCurrencyCode ||
+    taxRateNum !== Math.round(initialTaxRate * 10000) / 100;
+
   function handleSave() {
+    if (!taxRateValid) {
+      toast.error("Tax rate must be between 0 and 100");
+      return;
+    }
     startTransition(async () => {
       try {
         await updateOrgSettings({
           currency_code: selectedCurrency.code,
           currency_locale: selectedCurrency.locale,
+          tax_rate: taxRateNum / 100, // store as decimal
         });
-        toast.success("Currency settings saved");
+        toast.success("Organization settings saved");
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to save settings");
       }
     });
   }
-
-  const isDirty = selectedCode !== initialCurrencyCode;
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
@@ -78,6 +94,7 @@ export function OrganizationClient({ initialCurrencyCode }: OrganizationClientPr
         </p>
       </div>
 
+      {/* Currency */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
           <div className="flex items-center gap-2">
@@ -116,14 +133,64 @@ export function OrganizationClient({ initialCurrencyCode }: OrganizationClientPr
               }).format(1234.56)}
             </p>
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={!isDirty || isPending}>
-              {isPending ? "Saving…" : "Save Changes"}
-            </Button>
+      {/* Tax Rate */}
+      <Card>
+        <CardHeader className="border-b border-border pb-4">
+          <div className="flex items-center gap-2">
+            <Percent className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Tax Rate</CardTitle>
+          </div>
+          <CardDescription className="text-xs mt-1">
+            Applied to all POS transactions. Set to 0 to disable tax.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="tax-rate">Tax Rate (%)</Label>
+            <div className="flex items-center gap-2">
+              <div className="relative w-36">
+                <Input
+                  id="tax-rate"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={taxInput}
+                  onChange={(e) => setTaxInput(e.target.value)}
+                  className="pr-8"
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-muted-foreground">
+                  %
+                </span>
+              </div>
+              {taxRateValid && (
+                <span className="text-xs text-muted-foreground">
+                  e.g. {new Intl.NumberFormat(selectedCurrency.locale, {
+                    style: "currency",
+                    currency: selectedCurrency.code,
+                  }).format(100)} + {taxInput}% tax ={" "}
+                  {new Intl.NumberFormat(selectedCurrency.locale, {
+                    style: "currency",
+                    currency: selectedCurrency.code,
+                  }).format(100 * (1 + taxRateNum / 100))}
+                </span>
+              )}
+            </div>
+            {!taxRateValid && taxInput !== "" && (
+              <p className="text-xs text-destructive">Enter a value between 0 and 100</p>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={!isDirty || !taxRateValid || isPending}>
+          {isPending ? "Saving…" : "Save Changes"}
+        </Button>
+      </div>
     </div>
   );
 }

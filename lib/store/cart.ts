@@ -11,11 +11,13 @@ interface CartItem {
 interface CartStore {
   items: CartItem[];
   discount: number; // overall discount percentage
+  taxRate: number;  // e.g. 0.12 = 12%, synced from org settings
   addItem: (product: Product) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   updateItemDiscount: (productId: string, discount: number) => void;
   setDiscount: (discount: number) => void;
+  setTaxRate: (rate: number) => void;
   clearCart: () => void;
   loadHeldOrder: (heldItems: Array<{ product_id: string; product_name: string; quantity: number; unit_price: number; discount_amount: number }>) => void;
   // Computed
@@ -28,6 +30,7 @@ interface CartStore {
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
   discount: 0,
+  taxRate: 0.12,
 
   addItem: (product) => {
     const items = get().items;
@@ -79,6 +82,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   setDiscount: (discount) => set({ discount }),
 
+  setTaxRate: (rate) => set({ taxRate: rate }),
+
   clearCart: () => set({ items: [], discount: 0 }),
 
   loadHeldOrder: (heldItems) =>
@@ -104,7 +109,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     return itemDiscounts + overallDiscount;
   },
 
-  tax: () => (get().subtotal() - get().totalDiscount()) * 0.12, // 12% tax
+  tax: () => (get().subtotal() - get().totalDiscount()) * get().taxRate,
 
   total: () => get().subtotal() - get().totalDiscount() + get().tax(),
 }));

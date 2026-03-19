@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react"
+import { MoreHorizontal, Eye, Pencil, Trash2, PackageCheck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -31,6 +31,9 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useCurrency } from "@/lib/context/currency"
 import { NewPOSheet } from "./new-po-sheet"
+import { ReceivePODialog } from "./receive-po-dialog"
+import { ViewPODialog } from "./view-po-dialog"
+import type { POWithRelations } from "@/lib/actions/purchasing"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,10 +53,12 @@ interface PORow {
 
 interface Props {
   initialOrders: PORow[]
+  fullOrders: POWithRelations[]
   suppliers: Array<{ id: string; name: string }>
   branches: Array<{ id: string; name: string }>
   products: Array<{ id: string; name: string; sku: string; cost_price: number }>
   userBranchId: string | null
+  userRole: "super_admin" | "manager" | "cashier"
   supplierNames: string[]
 }
 
@@ -70,10 +75,12 @@ const STATUS_CONFIG: Record<POStatus, { label: string; className: string }> = {
 // ---------------------------------------------------------------------------
 export function OrdersClient({
   initialOrders,
+  fullOrders,
   suppliers,
   branches,
   products,
   userBranchId,
+  userRole,
   supplierNames,
 }: Props) {
   const { formatCurrency } = useCurrency()
@@ -82,6 +89,8 @@ export function OrdersClient({
   const [supplierFilter, setSupplierFilter] = React.useState("All Suppliers")
   const [dateFrom, setDateFrom] = React.useState("")
   const [dateTo, setDateTo] = React.useState("")
+  const [receivingPO, setReceivingPO] = React.useState<POWithRelations | null>(null)
+  const [viewingPO, setViewingPO] = React.useState<POWithRelations | null>(null)
 
   // Sync when server re-renders with fresh data via router refresh
   React.useEffect(() => {
@@ -123,12 +132,12 @@ export function OrdersClient({
       {/* Filters */}
       <Card>
         <CardContent className="py-3">
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end">
             <Select
               value={statusFilter}
               onValueChange={(v) => { if (v !== null) setStatusFilter(v) }}
             >
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full sm:w-36">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -145,7 +154,7 @@ export function OrdersClient({
               value={supplierFilter}
               onValueChange={(v) => { if (v !== null) setSupplierFilter(v) }}
             >
-              <SelectTrigger className="w-52">
+              <SelectTrigger className="w-full sm:w-52">
                 <SelectValue placeholder="Supplier" />
               </SelectTrigger>
               <SelectContent>
@@ -155,7 +164,7 @@ export function OrdersClient({
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-end gap-1.5">
               <div className="space-y-0.5">
                 <Label className="text-xs text-muted-foreground">From</Label>
                 <Input
@@ -165,7 +174,7 @@ export function OrdersClient({
                   className="w-36 h-8"
                 />
               </div>
-              <span className="text-muted-foreground text-sm mt-4">–</span>
+              <span className="text-muted-foreground text-sm mb-1.5">–</span>
               <div className="space-y-0.5">
                 <Label className="text-xs text-muted-foreground">To</Label>
                 <Input
@@ -235,7 +244,12 @@ export function OrdersClient({
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const full = fullOrders.find((o) => o.id === order.id) ?? null
+                                setViewingPO(full)
+                              }}
+                            >
                               <Eye className="h-4 w-4" />
                               View
                             </DropdownMenuItem>
@@ -243,6 +257,17 @@ export function OrdersClient({
                               <DropdownMenuItem>
                                 <Pencil className="h-4 w-4" />
                                 Edit
+                              </DropdownMenuItem>
+                            )}
+                            {(order.status === "ordered" || order.status === "partial") && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const full = fullOrders.find((o) => o.id === order.id) ?? null
+                                  setReceivingPO(full)
+                                }}
+                              >
+                                <PackageCheck className="h-4 w-4" />
+                                Receive Items
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
@@ -265,6 +290,18 @@ export function OrdersClient({
       <p className="text-xs text-muted-foreground text-right">
         Showing {filtered.length} of {orders.length} orders
       </p>
+
+      <ViewPODialog
+        po={viewingPO}
+        userRole={userRole}
+        onClose={() => setViewingPO(null)}
+        onReceive={(po) => setReceivingPO(po)}
+      />
+
+      <ReceivePODialog
+        po={receivingPO}
+        onClose={() => setReceivingPO(null)}
+      />
     </div>
   )
 }

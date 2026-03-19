@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { auth } from "@clerk/nextjs/server";
 import type { Database, Branch } from "@/types/database";
 import { StockClient, type StockRow } from "./stock-client";
 
@@ -10,7 +11,21 @@ function getAdminClient() {
 }
 
 export default async function StockPage() {
+  const { userId } = await auth();
   const supabase = getAdminClient();
+
+  let userBranchId: string | null = null;
+  let userRole: "super_admin" | "manager" | "cashier" = "cashier";
+
+  if (userId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("branch_id, role")
+      .eq("clerk_user_id", userId)
+      .single();
+    userBranchId = profile?.branch_id ?? null;
+    userRole = (profile?.role as typeof userRole) ?? "cashier";
+  }
 
   const [inventoryResult, branchesResult] = await Promise.all([
     supabase
@@ -37,5 +52,12 @@ export default async function StockPage() {
     updated_at: inv.updated_at,
   }));
 
-  return <StockClient initialRows={rows} branches={branches} />;
+  return (
+    <StockClient
+      initialRows={rows}
+      branches={branches}
+      userBranchId={userBranchId}
+      userRole={userRole}
+    />
+  );
 }

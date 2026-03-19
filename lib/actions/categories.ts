@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { Database } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 function getAdminClient() {
   return createClient<Database>(
@@ -36,6 +37,7 @@ export async function upsertCategory(params: {
     if (error) throw new Error(error.message)
   }
 
+  revalidateTag(CACHE_TAGS.CATEGORIES, {})
   revalidatePath('/settings/categories')
 }
 
@@ -50,5 +52,6 @@ export async function deleteCategory(id: string): Promise<void> {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  revalidateTag(CACHE_TAGS.CATEGORIES, {})
   revalidatePath('/settings/categories')
 }

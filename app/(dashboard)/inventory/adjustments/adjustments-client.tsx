@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { SlidersHorizontal, Calendar } from "lucide-react"
+import { SlidersHorizontal, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { NewAdjustmentDialog } from "./new-adjustment-dialog"
 
@@ -72,6 +71,7 @@ const TYPE_COLORS: Record<AdjType, string> = {
 // ---------------------------------------------------------------------------
 export function AdjustmentsClient({ initialRows, products, branches, defaultBranchId }: Props) {
   const [rows, setRows] = React.useState<AdjRow[]>(initialRows)
+  const [search, setSearch] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState("all")
   const [dateFrom, setDateFrom] = React.useState("")
   const [dateTo, setDateTo] = React.useState("")
@@ -82,11 +82,15 @@ export function AdjustmentsClient({ initialRows, products, branches, defaultBran
   }, [initialRows])
 
   const filtered = rows.filter((r) => {
+    const matchSearch =
+      !search ||
+      r.product.toLowerCase().includes(search.toLowerCase()) ||
+      r.sku.toLowerCase().includes(search.toLowerCase())
     const matchType = typeFilter === "all" || r.type === typeFilter
     const rowDate = r.date.slice(0, 10)
     const matchFrom = !dateFrom || rowDate >= dateFrom
     const matchTo = !dateTo || rowDate <= dateTo
-    return matchType && matchFrom && matchTo
+    return matchSearch && matchType && matchFrom && matchTo
   })
 
   return (
@@ -109,57 +113,63 @@ export function AdjustmentsClient({ initialRows, products, branches, defaultBran
 
       {/* Filters */}
       <Card>
-        <CardContent className="py-3">
-          <div className="flex flex-col sm:flex-row gap-3 items-end">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Select
-                value={typeFilter}
-                onValueChange={(v) => { if (v !== null) setTypeFilter(v) }}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="sale">Sale</SelectItem>
-                  <SelectItem value="purchase">Purchase</SelectItem>
-                  <SelectItem value="adjustment">Adjustment</SelectItem>
-                  <SelectItem value="damage">Damage</SelectItem>
-                  <SelectItem value="transfer_in">Transfer In</SelectItem>
-                  <SelectItem value="transfer_out">Transfer Out</SelectItem>
-                </SelectContent>
-              </Select>
+        <CardContent className="py-2.5 px-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Type */}
+            <Select
+              value={typeFilter}
+              onValueChange={(v) => { if (v !== null) setTypeFilter(v) }}
+            >
+              <SelectTrigger className="h-8 w-36 text-xs">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="sale">Sale</SelectItem>
+                <SelectItem value="purchase">Purchase</SelectItem>
+                <SelectItem value="adjustment">Adjustment</SelectItem>
+                <SelectItem value="damage">Damage</SelectItem>
+                <SelectItem value="transfer_in">Transfer In</SelectItem>
+                <SelectItem value="transfer_out">Transfer Out</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Date range */}
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 w-36 text-xs"
+              />
+              <span className="text-xs text-muted-foreground">–</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 w-36 text-xs"
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex items-center gap-1.5">
-                <div className="space-y-0.5">
-                  <Label className="text-xs text-muted-foreground">From</Label>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-36 h-8"
-                  />
-                </div>
-                <span className="text-muted-foreground text-sm mt-4">–</span>
-                <div className="space-y-0.5">
-                  <Label className="text-xs text-muted-foreground">To</Label>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-36 h-8"
-                  />
-                </div>
-              </div>
+
+            {/* Search */}
+            <div className="relative flex-1 min-w-40">
+              <Search className="pointer-events-none absolute inset-y-0 left-2.5 my-auto h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or SKU…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-8 text-xs w-full"
+              />
             </div>
-            {(typeFilter !== "all" || dateFrom || dateTo) && (
+
+            {/* Clear */}
+            {(search || typeFilter !== "all" || dateFrom || dateTo) && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setTypeFilter("all"); setDateFrom(""); setDateTo("") }}
+                className="h-8 px-2 text-xs text-muted-foreground"
+                onClick={() => { setSearch(""); setTypeFilter("all"); setDateFrom(""); setDateTo("") }}
               >
                 Clear
               </Button>

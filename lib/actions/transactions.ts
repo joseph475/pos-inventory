@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { Database } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 function getAdminClient() {
   return createClient<Database>(
@@ -108,7 +109,10 @@ export async function createTransaction(params: {
     })
   }
 
+  revalidateTag(CACHE_TAGS.INVENTORY, {})
+  revalidateTag(CACHE_TAGS.INVENTORY_MOVEMENTS, {})
   revalidatePath('/inventory')
+  revalidatePath('/inventory/adjustments')
 }
 
 export async function createHeldTransaction(params: {
@@ -170,8 +174,19 @@ export type HeldTransaction = {
 }
 
 export async function getHeldTransactions(): Promise<HeldTransaction[]> {
-  const profile = await getProfile()
+  const { userId } = await auth()
+  if (!userId) return []
+
   const supabase = getAdminClient()
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('id, branch_id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profileData?.branch_id) return []
+
+  const profile = profileData as { id: string; branch_id: string }
 
   const { data, error } = await supabase
     .from('transactions')

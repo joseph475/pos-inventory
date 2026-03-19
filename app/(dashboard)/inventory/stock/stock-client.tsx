@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Package, AlertTriangle, XCircle, Building2 } from "lucide-react";
+import { Package, AlertTriangle, XCircle, Building2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -35,6 +36,8 @@ export interface StockRow {
 interface StockClientProps {
   initialRows: StockRow[];
   branches: Branch[];
+  userBranchId?: string | null;
+  userRole?: "super_admin" | "manager" | "cashier";
 }
 
 type StockStatus = "in_stock" | "low" | "out";
@@ -68,13 +71,20 @@ function StatusBadge({ qty, threshold }: { qty: number; threshold: number }) {
   );
 }
 
-export function StockClient({ initialRows, branches }: StockClientProps) {
-  const [selectedBranch, setSelectedBranch] = React.useState("all");
+export function StockClient({ initialRows, branches, userBranchId, userRole }: StockClientProps) {
+  const defaultBranch =
+    userRole && userRole !== "super_admin" && userBranchId ? userBranchId : "all";
+  const [selectedBranch, setSelectedBranch] = React.useState(defaultBranch);
+  const [search, setSearch] = React.useState("");
 
-  const filtered =
-    selectedBranch === "all"
-      ? initialRows
-      : initialRows.filter((r) => r.branch_id === selectedBranch);
+  const filtered = initialRows.filter((r) => {
+    const matchBranch = selectedBranch === "all" || r.branch_id === selectedBranch;
+    const matchSearch =
+      !search ||
+      r.product_name.toLowerCase().includes(search.toLowerCase()) ||
+      r.sku.toLowerCase().includes(search.toLowerCase());
+    return matchBranch && matchSearch;
+  });
 
   const totalProducts = filtered.length;
   const lowStock = filtered.filter(
@@ -92,14 +102,27 @@ export function StockClient({ initialRows, branches }: StockClientProps) {
             Monitor inventory across branches
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by name or SKU…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 w-full sm:w-52"
+            />
+          </div>
+          <Building2 className="hidden sm:block h-4 w-4 text-muted-foreground" />
           <Select
             value={selectedBranch}
             onValueChange={(v) => { if (v !== null) setSelectedBranch(v); }}
           >
-            <SelectTrigger className="w-44">
-              <SelectValue />
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue>
+                {selectedBranch === "all"
+                  ? "All Branches"
+                  : (branches.find((b) => b.id === selectedBranch)?.name ?? "All Branches")}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Branches</SelectItem>

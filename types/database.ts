@@ -13,6 +13,7 @@ export type Database = {
           name: string;
           currency_code: string;
           currency_locale: string;
+          tax_rate: number;
           created_at: string;
         };
         Insert: {
@@ -20,6 +21,7 @@ export type Database = {
           name: string;
           currency_code?: string;
           currency_locale?: string;
+          tax_rate?: number;
           created_at?: string;
         };
         Update: {
@@ -27,6 +29,7 @@ export type Database = {
           name?: string;
           currency_code?: string;
           currency_locale?: string;
+          tax_rate?: number;
           created_at?: string;
         };
         Relationships: [];

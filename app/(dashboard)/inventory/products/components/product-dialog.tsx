@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Product, Category } from "@/types/database";
+import type { Product, Category, Branch } from "@/types/database";
+import { useCurrency } from "@/lib/context/currency";
 
 const productSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -33,6 +34,8 @@ const productSchema = z.object({
   selling_price: z.string().refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, "Must be 0 or greater"),
   description: z.string().optional(),
   is_active: z.boolean(),
+  opening_stock_qty: z.string().optional(),
+  opening_stock_branch_id: z.string().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -47,20 +50,32 @@ export interface ProductSaveValues {
   selling_price: number;
   description?: string;
   is_active: boolean;
+  opening_stock_qty?: number;
+  opening_stock_branch_id?: string;
 }
 
 const UNITS = ["each", "kg", "g", "liter", "ml", "dozen", "pack", "box", "bottle", "can"];
 
 interface ProductDialogProps {
   product?: Product;
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   categories: Category[];
+  branches?: Branch[];
   onSave?: (values: ProductSaveValues) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ProductDialog({ product, trigger, categories, onSave }: ProductDialogProps) {
+export function ProductDialog({ product, trigger, categories, branches = [], onSave, open: controlledOpen, onOpenChange }: ProductDialogProps) {
   const isEdit = !!product;
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const { currencyCode, locale } = useCurrency();
+  const currencySymbol = new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode })
+    .formatToParts(0)
+    .find((p) => p.type === "currency")?.value ?? currencyCode;
+
+  const open = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
 
   const {
     register,
@@ -81,6 +96,8 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
       selling_price: String(product?.selling_price ?? "0"),
       description: product?.description ?? "",
       is_active: product?.is_active ?? true,
+      opening_stock_qty: "",
+      opening_stock_branch_id: "",
     },
   });
 
@@ -96,24 +113,33 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
         selling_price: String(product?.selling_price ?? "0"),
         description: product?.description ?? "",
         is_active: product?.is_active ?? true,
+        opening_stock_qty: "",
+        opening_stock_branch_id: "",
       });
     }
   }, [open, product, reset]);
 
   const isActive = watch("is_active");
 
+  const openingBranchId = watch("opening_stock_branch_id");
+
   function onSubmit(values: ProductFormValues) {
+    const qty = parseFloat(values.opening_stock_qty ?? "") || 0;
     onSave?.({
       ...values,
       cost_price: parseFloat(values.cost_price),
       selling_price: parseFloat(values.selling_price),
+      opening_stock_qty: qty > 0 ? qty : undefined,
+      opening_stock_branch_id: qty > 0 ? values.opening_stock_branch_id : undefined,
     });
     setOpen(false);
   }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger render={trigger as React.ReactElement} nativeButton={true} />
+      {trigger && (
+        <SheetTrigger render={trigger as React.ReactElement} />
+      )}
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
         <div className="flex flex-col h-full">
           {/* Header */}
@@ -176,7 +202,7 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
                 <div className="space-y-1.5">
                   <Label htmlFor="category">Category</Label>
                   <Select
-                    defaultValue={product?.category_id ?? undefined}
+                    value={watch("category_id") ?? ""}
                     onValueChange={(val) => {
                       if (val !== null) setValue("category_id", val);
                     }}
@@ -200,13 +226,15 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
                     Unit <span className="text-destructive">*</span>
                   </Label>
                   <Select
-                    defaultValue={product?.unit ?? "each"}
+                    value={watch("unit") ?? "each"}
                     onValueChange={(val) => {
                       if (val !== null) setValue("unit", val);
                     }}
                   >
                     <SelectTrigger className="w-full" id="unit">
-                      <SelectValue placeholder="Select unit" />
+                      <SelectValue placeholder="Select unit">
+                        {watch("unit") ?? "Select unit"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {UNITS.map((unit) => (
@@ -229,7 +257,7 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
                     Cost Price <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currencySymbol}</span>
                     <Input
                       id="cost_price"
                       type="number"
@@ -250,7 +278,7 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
                     Selling Price <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currencySymbol}</span>
                     <Input
                       id="selling_price"
                       type="number"
@@ -278,6 +306,51 @@ export function ProductDialog({ product, trigger, categories, onSave }: ProductD
                   {...register("description")}
                 />
               </div>
+
+              {/* Opening Stock (add mode only) */}
+              {!isEdit && branches.length > 0 && (
+                <div className="space-y-3 rounded-lg border border-dashed border-border px-3 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Opening Stock</p>
+                    <p className="text-xs text-muted-foreground">Optional — set initial quantity for a branch</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="opening_stock_qty">Quantity</Label>
+                      <Input
+                        id="opening_stock_qty"
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                        {...register("opening_stock_qty")}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="opening_stock_branch">Branch</Label>
+                      <Select
+                        value={openingBranchId ?? ""}
+                        onValueChange={(val) => {
+                          if (val !== null) setValue("opening_stock_branch_id", val);
+                        }}
+                      >
+                        <SelectTrigger className="w-full" id="opening_stock_branch">
+                          <SelectValue placeholder="Select branch">
+                            {branches.find((b) => b.id === openingBranchId)?.name ?? "Select branch"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Active Toggle */}
               <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">

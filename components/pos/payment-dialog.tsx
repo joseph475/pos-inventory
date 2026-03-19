@@ -32,7 +32,7 @@ export function PaymentDialog({
   paymentMethod,
 }: PaymentDialogProps) {
   const { items, clearCart, subtotal, totalDiscount, tax, total } = useCartStore()
-  const { formatCurrency } = useCurrency()
+  const { formatCurrency, taxRate, currencySymbol } = useCurrency()
 
   const [cashTendered, setCashTendered] = React.useState("")
   const [splitCash, setSplitCash] = React.useState("")
@@ -141,7 +141,9 @@ export function PaymentDialog({
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax (12%)</span>
+              <span className="text-muted-foreground">
+                Tax ({Math.round(taxRate * 10000) / 100}%)
+              </span>
               <span>{formatCurrency(orderTax)}</span>
             </div>
           </div>
@@ -159,7 +161,7 @@ export function PaymentDialog({
               <Label htmlFor="cash-tendered">Amount Tendered</Label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-sm text-muted-foreground">
-                  $
+                  {currencySymbol}
                 </span>
                 <Input
                   id="cash-tendered"
@@ -209,7 +211,7 @@ export function PaymentDialog({
                 <Label htmlFor="split-cash">Cash Amount</Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-sm text-muted-foreground">
-                    $
+                    {currencySymbol}
                   </span>
                   <Input
                     id="split-cash"
@@ -228,7 +230,7 @@ export function PaymentDialog({
                 <Label htmlFor="split-card">Card Amount</Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-sm text-muted-foreground">
-                    $
+                    {currencySymbol}
                   </span>
                   <Input
                     id="split-card"

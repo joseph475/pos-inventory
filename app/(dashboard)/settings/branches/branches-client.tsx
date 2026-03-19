@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Plus, MoreHorizontal, Pencil, Trash2, Building2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -191,6 +192,7 @@ function BranchDialog({ branch, open, onOpenChange, onSaved }: BranchDialogProps
 }
 
 export function BranchesClient({ initialBranches }: BranchesClientProps) {
+  const router = useRouter();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingBranch, setEditingBranch] = React.useState<Branch | undefined>();
 
@@ -279,7 +281,7 @@ export function BranchesClient({ initialBranches }: BranchesClientProps) {
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => openEdit(branch)}>
+                          <DropdownMenuItem onClick={() => openEdit(branch)}>
                             <Pencil className="h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
@@ -303,7 +305,7 @@ export function BranchesClient({ initialBranches }: BranchesClientProps) {
         branch={editingBranch}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSaved={() => {}}
+        onSaved={() => router.refresh()}
       />
     </div>
   );

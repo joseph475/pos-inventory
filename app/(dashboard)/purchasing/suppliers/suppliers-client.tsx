@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Plus, MoreHorizontal, Pencil, Trash2, Building2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -151,6 +152,7 @@ function SupplierDialog({ supplier, open, onOpenChange, onSaved }: SupplierDialo
 }
 
 export function SuppliersClient({ initialSuppliers }: SuppliersClientProps) {
+  const router = useRouter();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
 
@@ -229,7 +231,7 @@ export function SuppliersClient({ initialSuppliers }: SuppliersClientProps) {
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => openEdit(supplier)}>
+                          <DropdownMenuItem onClick={() => openEdit(supplier)}>
                             <Pencil className="h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
@@ -253,7 +255,7 @@ export function SuppliersClient({ initialSuppliers }: SuppliersClientProps) {
         supplier={editingSupplier}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSaved={() => {}}
+        onSaved={() => router.refresh()}
       />
     </div>
   );

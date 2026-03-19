@@ -32,6 +32,7 @@ app/
       branches/         # Branch management
       categories/       # Product categories
       users/            # User management
+      organization/     # Org settings
   api/                  # Route handlers (webhooks etc.)
 components/
   ui/                   # shadcn/ui component wrappers
@@ -46,6 +47,26 @@ types/
   database.ts           # Full DB type definitions
 supabase/migrations/    # SQL migration files
 ```
+
+## Loading Skeletons
+Every route has a `loading.tsx` file — Next.js wraps it in Suspense automatically, giving instant visual feedback while server data loads. Do not remove these. When adding a new route, always create a matching `loading.tsx` with a skeleton that mirrors the page's visual structure.
+
+Existing `loading.tsx` files:
+- `app/(dashboard)/dashboard/loading.tsx`
+- `app/(dashboard)/pos/loading.tsx`
+- `app/(dashboard)/inventory/products/loading.tsx`
+- `app/(dashboard)/inventory/stock/loading.tsx`
+- `app/(dashboard)/inventory/adjustments/loading.tsx`
+- `app/(dashboard)/inventory/transfers/loading.tsx`
+- `app/(dashboard)/purchasing/orders/loading.tsx`
+- `app/(dashboard)/purchasing/suppliers/loading.tsx`
+- `app/(dashboard)/settings/branches/loading.tsx`
+- `app/(dashboard)/settings/users/loading.tsx`
+- `app/(dashboard)/settings/categories/loading.tsx`
+- `app/(dashboard)/settings/organization/loading.tsx`
+- `app/(dashboard)/reports/sales/loading.tsx`
+
+All skeletons import `Skeleton` from `@/components/ui/skeleton`.
 
 ## Database
 Single-org setup. All tables have `org_id` that references `'00000000-0000-0000-0000-000000000001'` (hardcoded constant `ORG_ID` in server actions).
@@ -154,6 +175,17 @@ Zustand store for POS cart. Key methods:
 - `subtotal()`, `totalDiscount()`, `tax()`, `total()` — computed values (call as functions)
 - Cart `discount` is a percentage (0–100); `totalDiscount()` includes both per-item and overall discounts
 
+## UserProfileProvider
+`lib/context/user-profile.tsx` — provides `useUserProfile()` hook with `{ profile, branch, loading, refetch }`.
+
+**SSR-seeded (no client fetch on page load):** `app/(dashboard)/layout.tsx` fetches the full profile via `ensureProfile()` (selects `"*, branches(*)"`) and passes it to the provider:
+```tsx
+<UserProfileProvider initialProfile={profile?.profile ?? null} initialBranch={profile?.branch ?? null}>
+```
+When `initialProfile` is provided, the client-side `getMyProfile()` fetch is skipped. `refetch()` still works for post-update scenarios (e.g. after saving profile changes).
+
+`ensureProfile()` returns `{ profile: Profile, branch: Branch | null } | null`. The `branches` join result is split out from the profile row before returning.
+
 ## Key Files Reference
 | File | Purpose |
 |------|---------|
@@ -164,7 +196,7 @@ Zustand store for POS cart. Key methods:
 | `lib/actions/inventory.ts` | Stock adjustments, `getPOSProducts` |
 | `lib/actions/purchasing.ts` | Purchase orders |
 | `lib/actions/users.ts` | User profile management |
-| `lib/context/user-profile.tsx` | `useUserProfile()` hook — current user's profile + branch |
+| `lib/context/user-profile.tsx` | `useUserProfile()` hook — SSR-seeded profile + branch, no client fetch on load |
 | `types/database.ts` | All DB row types + convenience exports |
 | `components/pos/payment-dialog.tsx` | POS payment confirmation → calls `createTransaction` |
 | `components/pos/hold-order-dialog.tsx` | Hold order → calls `createHeldTransaction` |

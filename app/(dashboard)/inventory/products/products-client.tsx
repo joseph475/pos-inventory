@@ -44,14 +44,16 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ProductDialog } from "./components/product-dialog";
 import { useCurrency } from "@/lib/context/currency";
 import { upsertProduct, deleteProduct, toggleProductActive } from "@/lib/actions/products";
+import { createStockAdjustment } from "@/lib/actions/inventory";
 import type { ProductSaveValues } from "./components/product-dialog";
-import type { Product, Category } from "@/types/database";
+import type { Product, Category, Branch } from "@/types/database";
 
 export type ProductWithCategory = Product & { category_name: string | null };
 
 interface ProductsClientProps {
   initialProducts: ProductWithCategory[];
   categories: Category[];
+  branches: Branch[];
 }
 
 const PAGE_SIZE = 6;
@@ -72,7 +74,7 @@ function ProductAvatar({ name }: { name: string }) {
   );
 }
 
-export function ProductsClient({ initialProducts, categories }: ProductsClientProps) {
+export function ProductsClient({ initialProducts, categories, branches }: ProductsClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { formatCurrency } = useCurrency();
@@ -80,10 +82,21 @@ export function ProductsClient({ initialProducts, categories }: ProductsClientPr
   const [categoryFilter, setCategoryFilter] = React.useState("All");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [page, setPage] = React.useState(1);
+  const [editingProduct, setEditingProduct] = React.useState<ProductWithCategory | null>(null);
 
   function handleSave(product: Product | undefined, values: ProductSaveValues) {
     startTransition(async () => {
-      await upsertProduct({ id: product?.id, ...values });
+      const { id: productId } = await upsertProduct({ id: product?.id, ...values });
+      if (!product && values.opening_stock_qty && values.opening_stock_qty > 0 && values.opening_stock_branch_id) {
+        await createStockAdjustment({
+          product_id: productId,
+          branch_id: values.opening_stock_branch_id,
+          type: "adjustment",
+          quantity: values.opening_stock_qty,
+          adjustment_direction: "add",
+          notes: "Opening stock",
+        });
+      }
       router.refresh();
     });
   }
@@ -137,6 +150,7 @@ export function ProductsClient({ initialProducts, categories }: ProductsClientPr
         </div>
         <ProductDialog
           categories={categories}
+          branches={branches}
           onSave={(values) => handleSave(undefined, values)}
           trigger={
             <Button>
@@ -261,17 +275,10 @@ export function ProductsClient({ initialProducts, categories }: ProductsClientPr
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <ProductDialog
-                            product={product}
-                            categories={categories}
-                            onSave={(values) => handleSave(product, values)}
-                            trigger={
-                              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                            }
-                          />
+                          <DropdownMenuItem onClick={() => setEditingProduct(product)}>
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleToggleActive(product.id, !product.is_active)}>
                             <ToggleLeft className="h-4 w-4" />
                             {product.is_active ? "Deactivate" : "Activate"}
@@ -291,6 +298,18 @@ export function ProductsClient({ initialProducts, categories }: ProductsClientPr
           )}
         </CardContent>
       </Card>
+
+      {/* Edit product dialog (controlled, outside dropdown) */}
+      <ProductDialog
+        product={editingProduct ?? undefined}
+        categories={categories}
+        open={!!editingProduct}
+        onOpenChange={(v) => { if (!v) setEditingProduct(null); }}
+        onSave={(values) => {
+          if (editingProduct) handleSave(editingProduct, values);
+          setEditingProduct(null);
+        }}
+      />
 
       {/* Pagination */}
       {filtered.length > PAGE_SIZE && (

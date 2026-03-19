@@ -214,13 +214,15 @@ export function NewAdjustmentDialog({ products, branches, defaultBranchId, onSuc
           <div className="space-y-1.5">
             <Label htmlFor="type">Adjustment Type</Label>
             <Select<string>
-              defaultValue="adjustment"
+              value={watchedType}
               onValueChange={(val) => {
                 if (val) setValue("type", val as "adjustment" | "damage", { shouldValidate: true })
               }}
             >
               <SelectTrigger className="w-full" id="type" aria-invalid={!!errors.type}>
-                <SelectValue />
+                <SelectValue>
+                  {watchedType === "damage" ? "Damage" : "Adjustment"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="adjustment">Adjustment</SelectItem>

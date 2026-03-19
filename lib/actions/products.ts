@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import type { Database } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 function getAdminClient() {
   return createClient<Database>(
@@ -25,7 +26,7 @@ export async function upsertProduct(params: {
   selling_price: number
   description?: string
   is_active: boolean
-}): Promise<void> {
+}): Promise<{ id: string }> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
 
@@ -43,20 +44,28 @@ export async function upsertProduct(params: {
     is_active: params.is_active,
   }
 
+  let productId: string
+
   if (params.id) {
     const { error } = await supabase
       .from('products')
       .update(payload)
       .eq('id', params.id)
     if (error) throw new Error(error.message)
+    productId = params.id
   } else {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .insert({ ...payload, org_id: ORG_ID })
+      .select('id')
+      .single()
     if (error) throw new Error(error.message)
+    productId = data.id
   }
 
+  revalidateTag(CACHE_TAGS.PRODUCTS, {})
   revalidatePath('/inventory/products')
+  return { id: productId }
 }
 
 export async function deleteProduct(id: string): Promise<void> {
@@ -70,6 +79,7 @@ export async function deleteProduct(id: string): Promise<void> {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  revalidateTag(CACHE_TAGS.PRODUCTS, {})
   revalidatePath('/inventory/products')
 }
 
@@ -84,5 +94,6 @@ export async function toggleProductActive(id: string, isActive: boolean): Promis
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  revalidateTag(CACHE_TAGS.PRODUCTS, {})
   revalidatePath('/inventory/products')
 }

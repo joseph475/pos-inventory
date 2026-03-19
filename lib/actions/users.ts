@@ -2,8 +2,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import type { Profile, Branch } from '@/types/database'
+import { CACHE_TAGS } from '@/lib/cache-tags'
 
 // Service role client — bypasses RLS. Not typed with Database generic to avoid
 // compatibility issues with the hand-authored Database type (missing Relationships).
@@ -63,31 +64,46 @@ export async function assignUserBranch(params: {
     .eq('id', params.profileId)
 
   if (error) throw new Error(error.message)
+  revalidateTag(CACHE_TAGS.USERS, {})
   revalidatePath('/settings/users')
 }
+
+const getAllUsersCached = unstable_cache(
+  async (): Promise<UserWithBranch[]> => {
+    const supabase = getAdminClient()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*, branches(name)')
+      .order('created_at', { ascending: false })
+    if (error) throw new Error(error.message)
+    return (data ?? []) as UserWithBranch[]
+  },
+  ['users'],
+  { tags: [CACHE_TAGS.USERS] }
+)
 
 export async function getAllUsers(): Promise<UserWithBranch[]> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
-
-  const supabase = getAdminClient()
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*, branches(name)')
-    .order('created_at', { ascending: false })
-
-  if (error) throw new Error(error.message)
-  return (data ?? []) as UserWithBranch[]
+  return getAllUsersCached()
 }
 
+const getAllBranchesCached = unstable_cache(
+  async (): Promise<Branch[]> => {
+    const supabase = getAdminClient()
+    const { data } = await supabase
+      .from('branches')
+      .select('*')
+      .eq('is_active', true)
+      .order('name')
+    return (data ?? []) as Branch[]
+  },
+  ['branches'],
+  { tags: [CACHE_TAGS.BRANCHES] }
+)
+
 export async function getAllBranches(): Promise<Branch[]> {
-  const supabase = getAdminClient()
-  const { data } = await supabase
-    .from('branches')
-    .select('*')
-    .eq('is_active', true)
-    .order('name')
-  return (data ?? []) as Branch[]
+  return getAllBranchesCached()
 }
 
 export async function upsertBranch(params: {
@@ -125,5 +141,6 @@ export async function upsertBranch(params: {
       })
     if (error) throw new Error(error.message)
   }
+  revalidateTag(CACHE_TAGS.BRANCHES, {})
   revalidatePath('/settings/branches')
 }
