@@ -61,6 +61,7 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "POS",
     href: "/pos",
     icon: ShoppingCart,
+    roles: ["manager", "cashier"],
   },
   {
     type: "section",
@@ -107,9 +108,9 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Settings",
     icon: SlidersHorizontal,
     defaultOpen: false,
-    roles: ["super_admin", "manager"],
+    roles: ["super_admin", "manager", "owner"],
     items: [
-      { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["super_admin"] },
+      { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["super_admin", "owner"] },
       { label: "Branches", href: "/settings/branches", icon: Building2 },
       { label: "Users", href: "/settings/users", icon: Users },
       { label: "Categories", href: "/settings/categories", icon: Tag },
@@ -244,7 +245,7 @@ export function SidebarNav({ className, onNavigate }: SidebarNavProps) {
 
       {/* Branch badge */}
       <div className="border-b border-sidebar-border px-3 py-3">
-        {role === "super_admin" ? (
+        {role === "super_admin" || role === "owner" ? (
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
             <Building2 className="h-4 w-4 shrink-0 text-sidebar-foreground/60" />
             <span className="flex-1 text-left text-sidebar-foreground/80 text-sm font-medium truncate">
@@ -285,8 +286,11 @@ export function SidebarNav({ className, onNavigate }: SidebarNavProps) {
             ) {
               return null;
             }
-
             if (entry.type === "link") {
+              // Hide links restricted by role
+              if (entry.roles && role && !entry.roles.includes(role)) {
+                return null;
+              }
               return (
                 <NavLink
                   key={entry.href}

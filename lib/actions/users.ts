@@ -49,16 +49,22 @@ export async function getMyProfile(): Promise<{ profile: Profile | null; branch:
 export async function assignUserBranch(params: {
   profileId: string
   branchId: string | null
-  role: 'super_admin' | 'manager' | 'cashier'
+  role: 'super_admin' | 'manager' | 'owner' | 'cashier'
 }): Promise<void> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
 
   const supabase = getAdminClient()
+
+  const { data: callerProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
   const { error } = await supabase
     .from('profiles')
     .update({
-      branch_id: params.role === 'super_admin' ? null : params.branchId,
+      branch_id: params.role === 'super_admin' || params.role === 'owner' ? null : params.branchId,
       role: params.role,
     })
     .eq('id', params.profileId)

@@ -23,7 +23,7 @@ export default async function OrganizationSettingsPage() {
     .eq("clerk_user_id", userId)
     .single();
 
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  if (profile?.role !== "super_admin" && profile?.role !== "owner") redirect("/dashboard");
 
   const settings = await getOrgSettings();
 

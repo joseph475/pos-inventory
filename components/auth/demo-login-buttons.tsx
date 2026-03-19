@@ -3,11 +3,11 @@
 import * as React from 'react'
 import { useSignIn } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
-import { ShieldCheck, Briefcase, ShoppingCart, Loader2 } from 'lucide-react'
+import { ShieldCheck, Briefcase, ShoppingCart, Loader2, Crown } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDemoCredentials } from '@/lib/actions/demo'
 
-type DemoRole = 'super_admin' | 'manager' | 'cashier'
+type DemoRole = 'super_admin' | 'manager' | 'cashier' | 'owner'
 
 const DEMO_ROLES: {
   role: DemoRole
@@ -44,6 +44,15 @@ const DEMO_ROLES: {
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10 hover:bg-emerald-500/20',
     border: 'border-emerald-500/30',
+  },
+  {
+    role: 'owner',
+    label: 'Owner',
+    description: 'Business owner — full access across all branches',
+    icon: Crown,
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10 hover:bg-amber-500/20',
+    border: 'border-amber-500/30',
   },
 ]
 

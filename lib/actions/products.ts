@@ -32,6 +32,11 @@ export async function upsertProduct(params: {
 
   const supabase = getAdminClient()
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
   const payload = {
     name: params.name,
     sku: params.sku,
@@ -73,6 +78,12 @@ export async function deleteProduct(id: string): Promise<void> {
   if (!userId) throw new Error('Unauthorized')
 
   const supabase = getAdminClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
   const { error } = await supabase
     .from('products')
     .delete()
@@ -88,6 +99,12 @@ export async function toggleProductActive(id: string, isActive: boolean): Promis
   if (!userId) throw new Error('Unauthorized')
 
   const supabase = getAdminClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
   const { error } = await supabase
     .from('products')
     .update({ is_active: isActive })

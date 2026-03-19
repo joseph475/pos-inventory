@@ -1,6 +1,6 @@
 'use server'
 
-type DemoRole = 'super_admin' | 'manager' | 'cashier'
+type DemoRole = 'super_admin' | 'manager' | 'cashier' | 'owner'
 
 export async function getDemoCredentials(role: DemoRole) {
   if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
@@ -19,6 +19,10 @@ export async function getDemoCredentials(role: DemoRole) {
     cashier: {
       email: process.env.DEMO_CASHIER_EMAIL!,
       password: process.env.DEMO_CASHIER_PASSWORD!,
+    },
+    owner: {
+      email: process.env.DEMO_OWNER_EMAIL!,
+      password: process.env.DEMO_OWNER_PASSWORD!,
     },
   }
 

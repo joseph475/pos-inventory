@@ -24,6 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter } from "next/navigation"
 import { useCartStore } from "@/lib/store/cart"
 import { useCurrency } from "@/lib/context/currency"
 import { PaymentDialog } from "@/components/pos/payment-dialog"
@@ -62,9 +63,19 @@ function StockBadge({ stock }: { stock: number }) {
 }
 
 export default function POSPage() {
+  const router = useRouter()
   const { profile, loading: profileLoading } = useUserProfile()
   const { formatCurrency, taxRate } = useCurrency()
   const branchId = profile?.branch_id ?? null
+
+  // Redirect roles that should not access POS
+  React.useEffect(() => {
+    if (!profileLoading && profile) {
+      if (profile.role === "super_admin" || profile.role === "owner") {
+        router.replace("/dashboard")
+      }
+    }
+  }, [profile, profileLoading, router])
 
   const {
     items,

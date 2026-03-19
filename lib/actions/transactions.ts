@@ -28,14 +28,17 @@ async function getProfile() {
   const supabase = getAdminClient()
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, branch_id')
+    .select('id, branch_id, role')
     .eq('clerk_user_id', userId)
     .single()
 
   if (error || !profile) throw new Error('Profile not found')
+  if (profile.role === 'super_admin' || profile.role === 'owner') {
+    throw new Error('This role does not have access to POS operations.')
+  }
   if (!profile.branch_id) throw new Error('No branch assigned to your account')
 
-  return profile as { id: string; branch_id: string }
+  return profile as { id: string; branch_id: string; role: string }
 }
 
 export async function createTransaction(params: {

@@ -16,7 +16,7 @@ export default async function PurchaseOrdersPage() {
 
   // Resolve user's branch and role
   let userBranchId: string | null = null
-  let userRole: "super_admin" | "manager" | "cashier" = "cashier"
+  let userRole: "super_admin" | "manager" | "cashier" | "owner" = "cashier"
 
   if (userId) {
     const supabase = getAdminClient()

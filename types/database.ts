@@ -73,7 +73,7 @@ export type Database = {
           clerk_user_id: string;
           org_id: string;
           branch_id: string | null;
-          role: "super_admin" | "manager" | "cashier";
+          role: "super_admin" | "manager" | "owner" | "cashier";
           full_name: string;
           email: string;
           created_at: string;
@@ -83,7 +83,7 @@ export type Database = {
           clerk_user_id: string;
           org_id: string;
           branch_id?: string | null;
-          role: "super_admin" | "manager" | "cashier";
+          role: "super_admin" | "manager" | "owner" | "cashier";
           full_name: string;
           email: string;
           created_at?: string;
@@ -93,7 +93,7 @@ export type Database = {
           clerk_user_id?: string;
           org_id?: string;
           branch_id?: string | null;
-          role?: "super_admin" | "manager" | "cashier";
+          role?: "super_admin" | "manager" | "owner" | "cashier";
           full_name?: string;
           email?: string;
           created_at?: string;

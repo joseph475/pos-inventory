@@ -26,7 +26,7 @@ export async function createTransfer(params: {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, role')
     .eq('clerk_user_id', userId)
     .single()
   if (!profile) throw new Error('Profile not found')
@@ -75,7 +75,7 @@ export async function updateTransferStatus(params: {
     .eq('clerk_user_id', userId)
     .single()
   if (!profile) throw new Error('Profile not found')
-  if (profile.role === 'cashier') throw new Error('Cashiers cannot update transfer status.')
+  if (profile.role === 'cashier') throw new Error('Insufficient permissions to update transfer status.')
 
   const { data: transfer, error: fetchError } = await supabase
     .from('stock_transfers')

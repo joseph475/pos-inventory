@@ -45,7 +45,7 @@ export async function createPurchaseOrder(params: {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, role')
     .eq('clerk_user_id', userId)
     .single()
   if (!profile) throw new Error('Profile not found')

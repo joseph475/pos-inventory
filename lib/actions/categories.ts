@@ -24,6 +24,11 @@ export async function upsertCategory(params: {
 
   const supabase = getAdminClient()
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
   if (params.id) {
     const { error } = await supabase
       .from('categories')
@@ -46,6 +51,12 @@ export async function deleteCategory(id: string): Promise<void> {
   if (!userId) throw new Error('Unauthorized')
 
   const supabase = getAdminClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
   const { error } = await supabase
     .from('categories')
     .delete()
