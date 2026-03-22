@@ -82,7 +82,7 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
         color: "#000",
         background: "#fff",
         width: "100%",
-        maxWidth: "300px",
+        maxWidth: "340px",
         margin: "0 auto",
         padding: "8px 0",
       }}
@@ -174,7 +174,7 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <Printer className="h-5 w-5 text-primary" />
@@ -186,7 +186,7 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
           <div className="max-h-[60vh] overflow-y-auto rounded-lg bg-muted/40 p-4">
             <div
               className="mx-auto overflow-hidden rounded-sm shadow-md"
-              style={{ width: "300px", background: "#fff" }}
+              style={{ width: "340px", background: "#fff" }}
             >
               {/* Torn-edge top */}
               <div style={{
