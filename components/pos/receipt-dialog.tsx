@@ -31,7 +31,7 @@ export interface ReceiptData {
   taxAmount: number
   taxRate: number
   total: number
-  paymentMethod: "cash" | "card" | "split"
+  paymentMethod: "cash" | "card" | "split" | "gcash" | "maya"
   cashTendered?: number
   change?: number
   splitCash?: number
@@ -138,7 +138,7 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
       <Divider />
 
       {/* Payment */}
-      <ReceiptLine>{`Payment: ${data.paymentMethod.charAt(0).toUpperCase() + data.paymentMethod.slice(1)}`}</ReceiptLine>
+      <ReceiptLine>{`Payment: ${data.paymentMethod === "gcash" ? "GCash" : data.paymentMethod === "maya" ? "Maya" : data.paymentMethod.charAt(0).toUpperCase() + data.paymentMethod.slice(1)}`}</ReceiptLine>
       {data.paymentMethod === "cash" && data.cashTendered !== undefined && (
         <>
           {row("Tendered:", data.formatCurrency(data.cashTendered))}

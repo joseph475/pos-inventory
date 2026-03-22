@@ -20,10 +20,10 @@ const getOrgSettingsCached = unstable_cache(
     const supabase = getAdminClient()
     const { data } = await supabase
       .from('organizations')
-      .select('currency_code, currency_locale, tax_rate')
+      .select('currency_code, currency_locale, tax_rate, gcash_qr_url, maya_qr_url')
       .eq('id', ORG_ID)
       .single()
-    return data ?? { currency_code: 'USD', currency_locale: 'en-US', tax_rate: 0.12 }
+    return data ?? { currency_code: 'USD', currency_locale: 'en-US', tax_rate: 0.12, gcash_qr_url: null, maya_qr_url: null }
   },
   ['org-settings'],
   { tags: [CACHE_TAGS.ORG_SETTINGS] }
@@ -52,6 +52,33 @@ export async function updateOrgSettings(settings: {
     .single()
 
   if (profile?.role !== 'super_admin') throw new Error('Forbidden')
+
+  const { error: updateError } = await supabase
+    .from('organizations')
+    .update(settings)
+    .eq('id', ORG_ID)
+
+  if (updateError) throw new Error(updateError.message)
+
+  revalidateTag(CACHE_TAGS.ORG_SETTINGS, {})
+  revalidatePath('/settings/organization')
+}
+
+export async function updateQRSettings(settings: {
+  gcash_qr_url: string | null
+  maya_qr_url: string | null
+}) {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (profile?.role !== 'super_admin' && profile?.role !== 'owner') throw new Error('Forbidden')
 
   const { error: updateError } = await supabase
     .from('organizations')

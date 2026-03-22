@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
 import { getPOSProducts } from "@/lib/actions/inventory"
+import { getOrgSettings } from "@/lib/actions/organization"
 import { POSClient } from "./pos-client"
 
 function getAdminClient() {
@@ -23,7 +24,16 @@ export default async function POSPage() {
     .eq("clerk_user_id", userId)
     .single()
 
-  const products = await getPOSProducts(profile?.branch_id ?? null)
+  const [products, orgSettings] = await Promise.all([
+    getPOSProducts(profile?.branch_id ?? null),
+    getOrgSettings(),
+  ])
 
-  return <POSClient initialProducts={products} />
+  return (
+    <POSClient
+      initialProducts={products}
+      gcashQrUrl={orgSettings.gcash_qr_url ?? null}
+      mayaQrUrl={orgSettings.maya_qr_url ?? null}
+    />
+  )
 }

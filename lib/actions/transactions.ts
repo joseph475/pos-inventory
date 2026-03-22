@@ -44,7 +44,7 @@ export async function createTransaction(params: {
   discount_amount: number
   tax_amount: number
   total: number
-  payment_method: 'cash' | 'card' | 'split'
+  payment_method: 'cash' | 'card' | 'split' | 'gcash' | 'maya'
   notes?: string
 }): Promise<{ id: string }> {
   const profile = await getProfile()

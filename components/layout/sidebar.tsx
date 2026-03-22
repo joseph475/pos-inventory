@@ -115,7 +115,7 @@ const NAV_ENTRIES: NavEntry[] = [
     defaultOpen: false,
     roles: ["super_admin", "manager", "owner"],
     items: [
-      { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["super_admin", "owner"] },
+      { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["owner"] },
       { label: "Branches", href: "/settings/branches", icon: Building2, roles: ["super_admin", "owner"] },
       { label: "Users", href: "/settings/users", icon: Users, roles: ["super_admin", "owner"] },
       { label: "Categories", href: "/settings/categories", icon: Tag, roles: ["owner", "manager"] },

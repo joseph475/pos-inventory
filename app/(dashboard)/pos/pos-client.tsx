@@ -16,7 +16,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Smartphone,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -31,7 +33,7 @@ import { HeldOrdersSheet } from "@/components/pos/held-orders-sheet"
 import type { POSProduct } from "@/lib/actions/inventory"
 import { cn } from "@/lib/utils"
 
-type PaymentMethod = "cash" | "card" | "split"
+type PaymentMethod = "cash" | "card" | "split" | "gcash" | "maya"
 
 type CategoryTab = { id: string; label: string }
 
@@ -69,7 +71,15 @@ function buildCategoryTabs(products: POSProduct[]): CategoryTab[] {
   return tabs
 }
 
-export function POSClient({ initialProducts }: { initialProducts: POSProduct[] }) {
+export function POSClient({
+  initialProducts,
+  gcashQrUrl,
+  mayaQrUrl,
+}: {
+  initialProducts: POSProduct[]
+  gcashQrUrl?: string | null
+  mayaQrUrl?: string | null
+}) {
   const { formatCurrency, taxRate } = useCurrency()
 
   const {
@@ -161,6 +171,36 @@ export function POSClient({ initialProducts }: { initialProducts: POSProduct[] }
     if (!isNaN(val)) updateQuantity(productId, val)
   }
 
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return
+    const q = search.trim()
+    if (!q) return
+
+    // 1. Exact barcode match (scanners produce exact codes)
+    const exactBarcode = initialProducts.find(
+      (p) => p.barcode && p.barcode === q && p.stock > 0
+    )
+    if (exactBarcode) {
+      addItem(exactBarcode)
+      setSearch("")
+      toast.success(`Added: ${exactBarcode.name}`)
+      return
+    }
+
+    // 2. Single filtered result
+    if (filteredProducts.length === 1 && filteredProducts[0].stock > 0) {
+      addItem(filteredProducts[0])
+      setSearch("")
+      toast.success(`Added: ${filteredProducts[0].name}`)
+      return
+    }
+
+    // 3. No match
+    if (filteredProducts.length === 0) {
+      toast.error("No product found", { description: q })
+    }
+  }
+
   const paymentMethods: {
     value: PaymentMethod
     label: string
@@ -173,6 +213,8 @@ export function POSClient({ initialProducts }: { initialProducts: POSProduct[] }
       label: "Split",
       icon: <SplitSquareHorizontal className="h-4 w-4" />,
     },
+    ...(gcashQrUrl ? [{ value: "gcash" as const, label: "GCash", icon: <Smartphone className="h-4 w-4" /> }] : []),
+    ...(mayaQrUrl ? [{ value: "maya" as const, label: "Maya", icon: <Smartphone className="h-4 w-4" /> }] : []),
   ]
 
   // Shared cart panel content
@@ -346,7 +388,7 @@ export function POSClient({ initialProducts }: { initialProducts: POSProduct[] }
 
         {/* Payment method selector */}
         <div className="px-4 pb-3">
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className={cn("grid gap-1.5", paymentMethods.length <= 3 ? "grid-cols-3" : "grid-cols-2")}>
             {paymentMethods.map((method) => (
               <button
                 key={method.value}
@@ -408,6 +450,7 @@ export function POSClient({ initialProducts }: { initialProducts: POSProduct[] }
                   placeholder="Search products or scan barcode…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
                   className="pl-8"
                 />
               </div>
@@ -578,6 +621,8 @@ export function POSClient({ initialProducts }: { initialProducts: POSProduct[] }
         open={paymentDialogOpen}
         onOpenChange={setPaymentDialogOpen}
         paymentMethod={paymentMethod}
+        gcashQrUrl={gcashQrUrl}
+        mayaQrUrl={mayaQrUrl}
       />
       <HoldOrderDialog
         open={holdDialogOpen}

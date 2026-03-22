@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { CheckCircle2 } from "lucide-react"
+import { CheckCircle2, QrCode } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,18 +20,29 @@ import { useUserProfile } from "@/lib/context/user-profile"
 import { createTransaction } from "@/lib/actions/transactions"
 import { ReceiptDialog, type ReceiptData } from "@/components/pos/receipt-dialog"
 
-type PaymentMethod = "cash" | "card" | "split"
+type PaymentMethod = "cash" | "card" | "split" | "gcash" | "maya"
 
 interface PaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   paymentMethod: PaymentMethod
+  gcashQrUrl?: string | null
+  mayaQrUrl?: string | null
+}
+
+function paymentMethodLabel(method: PaymentMethod): string {
+  if (method === "gcash") return "GCash"
+  if (method === "maya") return "Maya"
+  if (method === "split") return "Split"
+  return method.charAt(0).toUpperCase() + method.slice(1)
 }
 
 export function PaymentDialog({
   open,
   onOpenChange,
   paymentMethod,
+  gcashQrUrl,
+  mayaQrUrl,
 }: PaymentDialogProps) {
   const { items, clearCart, subtotal, totalDiscount, tax, total } = useCartStore()
   const { formatCurrency, taxRate, currencySymbol } = useCurrency()
@@ -66,6 +77,8 @@ export function PaymentDialog({
       : true
   const canConfirm =
     paymentMethod === "card" ||
+    paymentMethod === "gcash" ||
+    paymentMethod === "maya" ||
     (paymentMethod === "cash" && isCashValid) ||
     (paymentMethod === "split" && isSplitValid)
 
@@ -162,7 +175,7 @@ export function PaymentDialog({
             <span className="text-muted-foreground">
               {itemCount} item{itemCount !== 1 ? "s" : ""}
             </span>
-            <span className="font-medium capitalize">{paymentMethod}</span>
+            <span className="font-medium">{paymentMethodLabel(paymentMethod)}</span>
           </div>
           <Separator className="my-2" />
           <div className="space-y-1 text-sm">
@@ -236,6 +249,28 @@ export function PaymentDialog({
         {paymentMethod === "card" && (
           <div className="rounded-lg bg-muted/50 p-3 text-center text-sm text-muted-foreground">
             Card terminal ready. Please swipe, tap, or insert card to proceed.
+          </div>
+        )}
+
+        {/* GCash / Maya QR payment */}
+        {(paymentMethod === "gcash" || paymentMethod === "maya") && (
+          <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <QrCode className="h-4 w-4 text-muted-foreground" />
+              <span>Scan {paymentMethodLabel(paymentMethod)} QR to pay</span>
+            </div>
+            {(paymentMethod === "gcash" ? gcashQrUrl : mayaQrUrl) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={(paymentMethod === "gcash" ? gcashQrUrl : mayaQrUrl)!}
+                alt={`${paymentMethodLabel(paymentMethod)} QR Code`}
+                className="h-48 w-48 rounded object-contain"
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">QR image not configured.</p>
+            )}
+            <p className="text-xl font-bold text-foreground">{formatCurrency(orderTotal)}</p>
+            <p className="text-xs text-muted-foreground">Awaiting payment confirmation…</p>
           </div>
         )}
 

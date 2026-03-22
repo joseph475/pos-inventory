@@ -23,7 +23,7 @@ export default async function OrganizationSettingsPage() {
     .eq("clerk_user_id", userId)
     .single();
 
-  if (profile?.role !== "super_admin" && profile?.role !== "owner") redirect("/dashboard");
+  if (profile?.role !== "owner") redirect("/dashboard");
 
   const settings = await getOrgSettings();
 
@@ -31,6 +31,8 @@ export default async function OrganizationSettingsPage() {
     <OrganizationClient
       initialCurrencyCode={settings.currency_code}
       initialTaxRate={settings.tax_rate}
+      initialGcashQrUrl={settings.gcash_qr_url ?? null}
+      initialMayaQrUrl={settings.maya_qr_url ?? null}
     />
   );
 }

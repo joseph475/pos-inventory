@@ -14,6 +14,8 @@ export type Database = {
           currency_code: string;
           currency_locale: string;
           tax_rate: number;
+          gcash_qr_url: string | null;
+          maya_qr_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -22,6 +24,8 @@ export type Database = {
           currency_code?: string;
           currency_locale?: string;
           tax_rate?: number;
+          gcash_qr_url?: string | null;
+          maya_qr_url?: string | null;
           created_at?: string;
         };
         Update: {
@@ -30,6 +34,8 @@ export type Database = {
           currency_code?: string;
           currency_locale?: string;
           tax_rate?: number;
+          gcash_qr_url?: string | null;
+          maya_qr_url?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -355,7 +361,7 @@ export type Database = {
           discount_amount: number;
           tax_amount: number;
           total: number;
-          payment_method: "cash" | "card" | "split";
+          payment_method: "cash" | "card" | "split" | "gcash" | "maya";
           status: "completed" | "voided" | "held";
           notes: string | null;
           created_at: string;
@@ -368,7 +374,7 @@ export type Database = {
           discount_amount?: number;
           tax_amount?: number;
           total: number;
-          payment_method: "cash" | "card" | "split";
+          payment_method: "cash" | "card" | "split" | "gcash" | "maya";
           status?: "completed" | "voided" | "held";
           notes?: string | null;
           created_at?: string;
@@ -381,7 +387,7 @@ export type Database = {
           discount_amount?: number;
           tax_amount?: number;
           total?: number;
-          payment_method?: "cash" | "card" | "split";
+          payment_method?: "cash" | "card" | "split" | "gcash" | "maya";
           status?: "completed" | "voided" | "held";
           notes?: string | null;
           created_at?: string;
