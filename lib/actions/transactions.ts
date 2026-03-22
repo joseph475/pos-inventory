@@ -33,9 +33,6 @@ async function getProfile() {
     .single()
 
   if (error || !profile) throw new Error('Profile not found')
-  if (profile.role === 'super_admin' || profile.role === 'owner') {
-    throw new Error('This role does not have access to POS operations.')
-  }
   if (!profile.branch_id) throw new Error('No branch assigned to your account')
 
   return profile as { id: string; branch_id: string; role: string }
@@ -49,7 +46,7 @@ export async function createTransaction(params: {
   total: number
   payment_method: 'cash' | 'card' | 'split'
   notes?: string
-}): Promise<void> {
+}): Promise<{ id: string }> {
   const profile = await getProfile()
   const supabase = getAdminClient()
 
@@ -116,6 +113,7 @@ export async function createTransaction(params: {
   revalidateTag(CACHE_TAGS.INVENTORY_MOVEMENTS, {})
   revalidatePath('/inventory')
   revalidatePath('/inventory/adjustments')
+  return { id: transaction.id }
 }
 
 export async function createHeldTransaction(params: {

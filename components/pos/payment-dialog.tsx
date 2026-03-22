@@ -16,7 +16,9 @@ import {
 } from "@/components/ui/dialog"
 import { useCartStore } from "@/lib/store/cart"
 import { useCurrency } from "@/lib/context/currency"
+import { useUserProfile } from "@/lib/context/user-profile"
 import { createTransaction } from "@/lib/actions/transactions"
+import { ReceiptDialog, type ReceiptData } from "@/components/pos/receipt-dialog"
 
 type PaymentMethod = "cash" | "card" | "split"
 
@@ -33,11 +35,14 @@ export function PaymentDialog({
 }: PaymentDialogProps) {
   const { items, clearCart, subtotal, totalDiscount, tax, total } = useCartStore()
   const { formatCurrency, taxRate, currencySymbol } = useCurrency()
+  const { profile, branch } = useUserProfile()
 
   const [cashTendered, setCashTendered] = React.useState("")
   const [splitCash, setSplitCash] = React.useState("")
   const [splitCard, setSplitCard] = React.useState("")
   const [isProcessing, setIsProcessing] = React.useState(false)
+  const [receiptData, setReceiptData] = React.useState<ReceiptData | null>(null)
+  const [receiptOpen, setReceiptOpen] = React.useState(false)
 
   const orderTotal = total()
   const orderSubtotal = subtotal()
@@ -68,7 +73,7 @@ export function PaymentDialog({
     if (!canConfirm) return
     setIsProcessing(true)
     try {
-      await createTransaction({
+      const result = await createTransaction({
         items: items.map((i) => ({
           product_id: i.product.id,
           product_name: i.product.name,
@@ -82,6 +87,36 @@ export function PaymentDialog({
         total: orderTotal,
         payment_method: paymentMethod,
       })
+
+      // Capture receipt data before clearing cart
+      setReceiptData({
+        transactionId: result.id,
+        timestamp: new Date(),
+        branchName: branch?.name ?? "Store",
+        branchAddress: branch?.address ?? null,
+        branchPhone: branch?.phone ?? null,
+        cashierName: profile?.full_name ?? "Cashier",
+        items: items.map((i) => ({
+          name: i.product.name,
+          qty: i.quantity,
+          unitPrice: i.unit_price,
+          discountAmount: i.discount_amount,
+          lineTotal: i.unit_price * i.quantity - i.discount_amount,
+        })),
+        subtotal: orderSubtotal,
+        discountAmount: orderDiscount,
+        taxAmount: orderTax,
+        taxRate,
+        total: orderTotal,
+        paymentMethod,
+        cashTendered: paymentMethod === "cash" ? cashTenderedNum : undefined,
+        change: paymentMethod === "cash" ? change : undefined,
+        splitCash: paymentMethod === "split" ? splitCashNum : undefined,
+        splitCard: paymentMethod === "split" ? splitCardNum : undefined,
+        formatCurrency,
+      })
+      setReceiptOpen(true)
+
       clearCart()
       onOpenChange(false)
       setCashTendered("")
@@ -111,6 +146,7 @@ export function PaymentDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md" showCloseButton={!isProcessing}>
         <DialogHeader>
@@ -289,5 +325,17 @@ export function PaymentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {receiptData && (
+      <ReceiptDialog
+        open={receiptOpen}
+        onOpenChange={(val) => {
+          setReceiptOpen(val)
+          if (!val) setReceiptData(null)
+        }}
+        data={receiptData}
+      />
+    )}
+  </>
   )
 }

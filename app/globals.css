@@ -116,6 +116,29 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ── Receipt print ─────────────────────────────────────────── */
+#pos-receipt {
+  display: none;
+}
+
+@media print {
+  body > *:not(#pos-receipt) {
+    display: none !important;
+  }
+  #pos-receipt {
+    display: block !important;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #000;
+    background: #fff;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+    padding: 8px 0;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
