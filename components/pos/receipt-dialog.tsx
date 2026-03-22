@@ -81,7 +81,6 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
         lineHeight: "1.4",
         color: "#000",
         background: "#fff",
-        width: "100%",
         padding: "8px 0",
       }}
     >
@@ -181,8 +180,10 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
           </DialogHeader>
 
           {/* Receipt preview */}
-          <div className="max-h-[60vh] overflow-y-auto rounded-lg border bg-white p-3">
-            <ReceiptContent data={data} />
+          <div className="max-h-[60vh] overflow-auto rounded-lg border bg-white p-3 flex justify-center">
+            <div style={{ width: "fit-content" }}>
+              <ReceiptContent data={data} />
+            </div>
           </div>
 
           <DialogFooter>
