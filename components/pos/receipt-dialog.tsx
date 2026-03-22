@@ -182,9 +182,28 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
             </DialogTitle>
           </DialogHeader>
 
-          {/* Scrollable receipt preview */}
-          <div className="max-h-[60vh] overflow-y-auto rounded-lg border bg-white p-2">
-            <ReceiptContent data={data} />
+          {/* Scrollable receipt preview — mimics thermal paper slip */}
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg bg-muted/40 p-4">
+            <div
+              className="mx-auto overflow-hidden rounded-sm shadow-md"
+              style={{ width: "300px", background: "#fff" }}
+            >
+              {/* Torn-edge top */}
+              <div style={{
+                height: "8px",
+                background: "repeating-linear-gradient(90deg, #fff 0px, #fff 6px, #f0f0f0 6px, #f0f0f0 8px)",
+                borderBottom: "1px dashed #ccc",
+              }} />
+              <div style={{ padding: "4px 8px 4px" }}>
+                <ReceiptContent data={data} />
+              </div>
+              {/* Torn-edge bottom */}
+              <div style={{
+                height: "8px",
+                background: "repeating-linear-gradient(90deg, #fff 0px, #fff 6px, #f0f0f0 6px, #f0f0f0 8px)",
+                borderTop: "1px dashed #ccc",
+              }} />
+            </div>
           </div>
 
           <DialogFooter>
