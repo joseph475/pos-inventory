@@ -1,51 +1,66 @@
 # Inventory POS — Claude Project Context
 
 ## What This Is
-A multi-branch inventory and point-of-sale system. Businesses can manage products, stock, purchases, and sales across multiple branches. Users have role-based access (super_admin, manager, cashier).
+A multi-branch inventory and point-of-sale system. Businesses can manage products, stock, purchases, and sales across multiple branches. Users have role-based access (owner, super_admin, manager, cashier). Demo mode is supported for quick role-based testing.
 
 ## Tech Stack
-- **Framework**: Next.js 16 (App Router), React 19
-- **Auth**: Clerk (`@clerk/nextjs` v7) — `proxy.ts` handles auth middleware
-- **Database**: Supabase (Postgres) via `@supabase/supabase-js` — always use the **service role admin client** (bypasses RLS)
-- **UI**: shadcn/ui components built on **Base UI** (`@base-ui/react` v1.3), NOT Radix UI
-- **Styling**: Tailwind CSS v4
-- **Forms**: React Hook Form + Zod v4 (`zod/v4`)
-- **State**: Zustand (cart store at `lib/store/cart.ts`)
-- **Charts**: Recharts
-- **Toasts**: Sonner
+- **Framework**: Next.js 16.1.7 (App Router), React 19.2.3
+- **Auth**: Clerk (`@clerk/nextjs` v7.0.4) — `proxy.ts` handles auth middleware
+- **Database**: Supabase (Postgres) via `@supabase/supabase-js` v2.99.2 + `@supabase/ssr` v0.9.0 — always use the **service role admin client** (bypasses RLS)
+- **UI**: shadcn/ui (`shadcn` v4, style: `base-nova`) built on **Base UI** (`@base-ui/react` v1.3), NOT Radix UI
+- **Styling**: Tailwind CSS v4 (CSS-first, no `tailwind.config.ts` — configured via `@theme` in `globals.css`)
+- **Fonts**: Geist Sans + Geist Mono (`next/font/google`, CSS vars: `--font-geist-sans`, `--font-geist-mono`)
+- **Forms**: React Hook Form v7 + Zod v4 (`zod/v4`)
+- **State**: Zustand v5 (cart store at `lib/store/cart.ts`)
+- **Charts**: Recharts v3
+- **Toasts**: Sonner v2
+- **Icons**: Lucide React v0.577
+- **Date**: date-fns v4
+- **Bundler**: Turbopack (top-level `turbopack` key in `next.config.ts`)
 
 ## Project Structure
 ```
 app/
-  (dashboard)/          # All authenticated pages
-    pos/                # Point of sale
+  (auth)/
+    sign-in/[[...sign-in]]/   # Clerk sign-in (with demo mode panel)
+    sign-up/[[...sign-up]]/   # Clerk sign-up
+  (dashboard)/                # All authenticated pages
+    dashboard/                # Overview/stats
+    pos/                      # Point of sale
     inventory/
-      products/         # Product catalog
-      stock/            # Stock levels
-      transfers/        # Branch-to-branch stock transfers
-      adjustments/      # Manual stock adjustments
+      products/               # Product catalog
+      stock/                  # Stock levels
+      transfers/              # Branch-to-branch stock transfers
+      adjustments/            # Manual stock adjustments
     purchasing/
-      orders/           # Purchase orders
-      suppliers/        # Supplier management
-    reports/sales/      # Sales reports
+      orders/                 # Purchase orders
+      suppliers/              # Supplier management
+    reports/sales/            # Sales reports
     settings/
-      branches/         # Branch management
-      categories/       # Product categories
-      users/            # User management
-      organization/     # Org settings
-  api/                  # Route handlers (webhooks etc.)
+      branches/               # Branch management
+      categories/             # Product categories
+      users/                  # User management
+      organization/           # Org settings
+    layout.tsx                # Dashboard layout — fetches profile, seeds providers
+    page.tsx                  # Redirects to /dashboard
+  api/webhooks/clerk/         # Clerk webhook handler
+  layout.tsx                  # Root layout (ClerkProvider, Geist fonts, Sonner, dark mode)
+  globals.css                 # Tailwind v4 @theme + global styles
 components/
-  ui/                   # shadcn/ui component wrappers
-  pos/                  # POS-specific components
-  layout/               # Sidebar, nav
+  ui/                         # shadcn/ui component wrappers (Base UI based)
+  auth/                       # demo-login-buttons.tsx
+  pos/                        # POS-specific components
+  layout/                     # Sidebar, nav
 lib/
-  actions/              # Server actions ('use server')
-  store/                # Zustand stores
-  supabase/             # Supabase client helpers
-  utils/                # Shared utilities
+  actions/                    # Server actions ('use server')
+  context/                    # React context providers
+  store/                      # Zustand stores
+  supabase/                   # Supabase client helpers
+  utils/                      # Shared utilities
+  cache-tags.ts               # Centralized cache tag constants
 types/
-  database.ts           # Full DB type definitions
-supabase/migrations/    # SQL migration files
+  database.ts                 # Full DB type definitions
+supabase/migrations/          # SQL migration files (5 total)
 ```
 
 ## Loading Skeletons
@@ -73,7 +88,14 @@ Single-org setup. All tables have `org_id` that references `'00000000-0000-0000-
 
 Key tables: `organizations`, `branches`, `profiles`, `categories`, `products`, `inventory`, `inventory_movements`, `transactions`, `transaction_items`, `stock_transfers`, `stock_transfer_items`, `purchase_orders`, `purchase_order_items`, `suppliers`
 
-The `profiles` table links Clerk users (`clerk_user_id`) to roles and branches. Roles: `super_admin`, `manager`, `cashier`.
+The `profiles` table links Clerk users (`clerk_user_id`) to roles and branches. Roles: `owner`, `super_admin`, `manager`, `cashier`.
+
+Migrations (5 total):
+1. `001_initial_schema.sql` — Tables, RLS, indexes
+2. `002_seed_data.sql` — Initial seed data
+3. `003_add_currency_to_organizations.sql` — Currency field
+4. `004_add_tax_rate_to_organizations.sql` — Tax rate field
+5. `005_add_owner_role.sql` — Owner role support
 
 **Important**: The `Database` type in `types/database.ts` has empty `Relationships: []` for all tables. Supabase join queries (e.g. `.select('*, transaction_items(...)')`) return `never` type — always cast with `as any[]` and re-type manually.
 
@@ -164,9 +186,18 @@ When a table has multiple FK columns pointing to the same table, Supabase requir
 ## Role-Based Access
 - `cashier`: POS only, cannot approve transfers, cannot access settings
 - `manager`: All operations except user/branch management
-- `super_admin`: Full access
+- `super_admin`: Full access including user/branch management
+- `owner`: Top-level role, same as super_admin or broader access
 
 Role checks should be done **server-side** in server actions (throw error) AND **client-side** (hide UI). Get role from the `profiles` table via `clerk_user_id`.
+
+## Demo Mode
+When `NEXT_PUBLIC_DEMO_MODE=true`, the sign-in page shows a panel with one-click login buttons for each role (Owner, Super Admin, Manager, Cashier). Demo credentials are stored in `DEMO_*` env vars and handled by `lib/actions/demo.ts` + `components/auth/demo-login-buttons.tsx`.
+
+## Context Providers
+- `lib/context/user-profile.tsx` — `useUserProfile()` hook `{ profile, branch, loading, refetch }` (SSR-seeded)
+- `lib/context/currency.tsx` — currency formatting context, reads from org settings
+- `lib/context/tax-rate-sync.tsx` — syncs org tax rate to cart store
 
 ## Cart Store (`lib/store/cart.ts`)
 Zustand store for POS cart. Key methods:
@@ -194,13 +225,21 @@ When `initialProfile` is provided, the client-side `getMyProfile()` fetch is ski
 | `lib/actions/categories.ts` | Category CRUD |
 | `lib/actions/transfers.ts` | Stock transfer create + status updates |
 | `lib/actions/inventory.ts` | Stock adjustments, `getPOSProducts` |
-| `lib/actions/purchasing.ts` | Purchase orders |
+| `lib/actions/purchasing.ts` | Purchase orders + suppliers |
 | `lib/actions/users.ts` | User profile management |
-| `lib/context/user-profile.tsx` | `useUserProfile()` hook — SSR-seeded profile + branch, no client fetch on load |
+| `lib/actions/organization.ts` | Org settings (currency, tax rate, name) |
+| `lib/actions/reports.ts` | Sales report data queries |
+| `lib/actions/demo.ts` | Demo mode login helpers |
+| `lib/context/user-profile.tsx` | `useUserProfile()` hook — SSR-seeded profile + branch |
+| `lib/context/currency.tsx` | Currency formatting context |
+| `lib/context/tax-rate-sync.tsx` | Syncs org tax rate to cart store |
+| `lib/cache-tags.ts` | Centralized cache tag string constants |
 | `types/database.ts` | All DB row types + convenience exports |
 | `components/pos/payment-dialog.tsx` | POS payment confirmation → calls `createTransaction` |
 | `components/pos/hold-order-dialog.tsx` | Hold order → calls `createHeldTransaction` |
 | `components/pos/held-orders-sheet.tsx` | Resume/delete held orders from DB |
+| `components/auth/demo-login-buttons.tsx` | Demo mode role quick-login buttons |
+| `proxy.ts` | Clerk auth middleware (protects all non-public routes) |
 
 ## Commands
 ```bash
@@ -211,9 +250,31 @@ npm run lint     # ESLint
 
 ## Environment Variables
 ```
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
+
+# Clerk
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 CLERK_SECRET_KEY
 CLERK_WEBHOOK_SECRET
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard
+
+# App
+NEXT_PUBLIC_DEFAULT_ORG_ID=00000000-0000-0000-0000-000000000001
+
+# Demo mode (optional)
+NEXT_PUBLIC_DEMO_MODE=true
+DEMO_SUPER_ADMIN_EMAIL
+DEMO_SUPER_ADMIN_PASSWORD
+DEMO_MANAGER_EMAIL
+DEMO_MANAGER_PASSWORD
+DEMO_CASHIER_EMAIL
+DEMO_CASHIER_PASSWORD
+DEMO_OWNER_EMAIL
+DEMO_OWNER_PASSWORD
 ```

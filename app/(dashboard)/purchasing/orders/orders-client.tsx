@@ -123,6 +123,7 @@ export function OrdersClient({
           branches={branches}
           products={products}
           userBranchId={userBranchId}
+          userRole={userRole}
           onSuccess={() => {
             // Page will revalidate via server action; re-render will update initialOrders
           }}

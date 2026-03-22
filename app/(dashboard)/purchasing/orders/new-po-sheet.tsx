@@ -63,13 +63,14 @@ interface Props {
   branches: Array<{ id: string; name: string }>
   products: Array<{ id: string; name: string; sku: string; cost_price: number }>
   userBranchId: string | null
+  userRole: "owner" | "super_admin" | "manager" | "cashier"
   onSuccess: () => void
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-export function NewPOSheet({ suppliers, branches, products, userBranchId, onSuccess }: Props) {
+export function NewPOSheet({ suppliers, branches, products, userBranchId, userRole, onSuccess }: Props) {
   const { formatCurrency, currencyCode, locale } = useCurrency()
   const currencySymbol = new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode })
     .formatToParts(0)
@@ -196,27 +197,35 @@ export function NewPOSheet({ suppliers, branches, products, userBranchId, onSucc
             {/* Branch */}
             <div className="space-y-1.5">
               <Label htmlFor="branch_id">Branch</Label>
-              <Select<string>
-                value={watchedBranchId}
-                onValueChange={(val) => {
-                  if (val) setValue("branch_id", val, { shouldValidate: true })
-                }}
-              >
-                <SelectTrigger className="w-full" id="branch_id" aria-invalid={!!errors.branch_id}>
-                  <SelectValue placeholder="Select a branch…">
-                    {selectedBranch?.name ?? null}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.branch_id && (
-                <p className="text-xs text-destructive">{errors.branch_id.message}</p>
+              {userRole === "manager" ? (
+                <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                  {selectedBranch?.name ?? "—"}
+                </div>
+              ) : (
+                <>
+                  <Select<string>
+                    value={watchedBranchId}
+                    onValueChange={(val) => {
+                      if (val) setValue("branch_id", val, { shouldValidate: true })
+                    }}
+                  >
+                    <SelectTrigger className="w-full" id="branch_id" aria-invalid={!!errors.branch_id}>
+                      <SelectValue placeholder="Select a branch…">
+                        {selectedBranch?.name ?? null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.branch_id && (
+                    <p className="text-xs text-destructive">{errors.branch_id.message}</p>
+                  )}
+                </>
               )}
             </div>
 
