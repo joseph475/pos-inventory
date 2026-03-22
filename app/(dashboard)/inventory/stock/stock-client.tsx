@@ -227,7 +227,7 @@ export function StockClient({ initialRows, branches, userBranchId, userRole }: S
                     <TableCell>
                       <StatusBadge qty={row.quantity} threshold={row.threshold} />
                     </TableCell>
-                    <TableCell className="pr-4 text-xs text-muted-foreground font-mono">
+                    <TableCell className="pr-4 text-xs text-muted-foreground font-mono" suppressHydrationWarning>
                       {new Date(row.updated_at).toLocaleDateString()}
                     </TableCell>
                   </TableRow>

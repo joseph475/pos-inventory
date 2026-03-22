@@ -32,8 +32,12 @@ export default async function POSPage() {
   return (
     <POSClient
       initialProducts={products}
+      userRole={profile?.role ?? "cashier"}
       gcashQrUrl={orgSettings.gcash_qr_url ?? null}
       mayaQrUrl={orgSettings.maya_qr_url ?? null}
+      maxCashierDiscountPct={orgSettings.max_cashier_discount_pct}
+      receiptHeader={orgSettings.receipt_header ?? null}
+      receiptFooter={orgSettings.receipt_footer ?? null}
     />
   )
 }

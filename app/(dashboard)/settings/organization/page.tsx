@@ -33,6 +33,9 @@ export default async function OrganizationSettingsPage() {
       initialTaxRate={settings.tax_rate}
       initialGcashQrUrl={settings.gcash_qr_url ?? null}
       initialMayaQrUrl={settings.maya_qr_url ?? null}
+      initialReceiptHeader={settings.receipt_header ?? null}
+      initialReceiptFooter={settings.receipt_footer ?? null}
+      initialMaxCashierDiscountPct={settings.max_cashier_discount_pct}
     />
   );
 }

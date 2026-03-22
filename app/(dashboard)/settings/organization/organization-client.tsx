@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Globe, Percent, QrCode } from "lucide-react";
+import { Globe, Percent, QrCode, Receipt, ShieldCheck, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateOrgSettings, updateQRSettings } from "@/lib/actions/organization";
+import { updateOrgSettings, updateQRSettings, updateOwnerSettings, uploadQrImage } from "@/lib/actions/organization";
 
 const CURRENCIES = [
   { code: "USD", locale: "en-US",  label: "USD — US Dollar ($)" },
@@ -46,6 +47,9 @@ interface OrganizationClientProps {
   initialTaxRate: number;
   initialGcashQrUrl: string | null;
   initialMayaQrUrl: string | null;
+  initialReceiptHeader: string | null;
+  initialReceiptFooter: string | null;
+  initialMaxCashierDiscountPct: number;
 }
 
 export function OrganizationClient({
@@ -53,10 +57,14 @@ export function OrganizationClient({
   initialTaxRate,
   initialGcashQrUrl,
   initialMayaQrUrl,
+  initialReceiptHeader,
+  initialReceiptFooter,
+  initialMaxCashierDiscountPct,
 }: OrganizationClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isQrPending, startQrTransition] = useTransition();
+  const [isOwnerPending, startOwnerTransition] = useTransition();
 
   const [selectedCode, setSelectedCode] = React.useState(initialCurrencyCode);
   // Display as percentage string, e.g. 0.12 → "12"
@@ -65,19 +73,63 @@ export function OrganizationClient({
   );
   const [gcashQrUrl, setGcashQrUrl] = React.useState(initialGcashQrUrl ?? "");
   const [mayaQrUrl, setMayaQrUrl] = React.useState(initialMayaQrUrl ?? "");
+  // Track what's actually saved in DB (updated after upload auto-saves)
+  const [gcashSaved, setGcashSaved] = React.useState(initialGcashQrUrl ?? "");
+  const [mayaSaved, setMayaSaved] = React.useState(initialMayaQrUrl ?? "");
+  const [gcashUploading, setGcashUploading] = React.useState(false);
+  const [mayaUploading, setMayaUploading] = React.useState(false);
+  const gcashFileRef = React.useRef<HTMLInputElement>(null);
+  const mayaFileRef = React.useRef<HTMLInputElement>(null);
+  const [receiptHeader, setReceiptHeader] = React.useState(initialReceiptHeader ?? "");
+  const [receiptFooter, setReceiptFooter] = React.useState(initialReceiptFooter ?? "");
+  const [maxDiscountInput, setMaxDiscountInput] = React.useState(
+    String(initialMaxCashierDiscountPct)
+  );
 
   const selectedCurrency = CURRENCIES.find((c) => c.code === selectedCode) ?? CURRENCIES[0];
 
   const taxRateNum = parseFloat(taxInput);
   const taxRateValid = !isNaN(taxRateNum) && taxRateNum >= 0 && taxRateNum <= 100;
 
+  const maxDiscountNum = parseFloat(maxDiscountInput);
+  const maxDiscountValid = !isNaN(maxDiscountNum) && maxDiscountNum >= 0 && maxDiscountNum <= 100;
+
   const isDirty =
     selectedCode !== initialCurrencyCode ||
     taxRateNum !== Math.round(initialTaxRate * 10000) / 100;
 
   const isQrDirty =
-    gcashQrUrl !== (initialGcashQrUrl ?? "") ||
-    mayaQrUrl !== (initialMayaQrUrl ?? "");
+    gcashQrUrl !== gcashSaved ||
+    mayaQrUrl !== mayaSaved;
+
+  const isOwnerDirty =
+    receiptHeader !== (initialReceiptHeader ?? "") ||
+    receiptFooter !== (initialReceiptFooter ?? "") ||
+    maxDiscountNum !== initialMaxCashierDiscountPct;
+
+  async function handleQrUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'gcash' | 'maya') {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const setUploading = type === 'gcash' ? setGcashUploading : setMayaUploading
+    const setUrl = type === 'gcash' ? setGcashQrUrl : setMayaQrUrl
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const url = await uploadQrImage(formData, type)
+      setUrl(url)
+      // Upload already saved to DB — sync the "initial" value so Save button doesn't flag as dirty
+      if (type === 'gcash') setGcashSaved(url)
+      else setMayaSaved(url)
+      toast.success(`${type === 'gcash' ? 'GCash' : 'Maya'} QR image uploaded and saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      // Reset input so the same file can be re-selected
+      e.target.value = ''
+    }
+  }
 
   function handleSave() {
     if (!taxRateValid) {
@@ -99,17 +151,46 @@ export function OrganizationClient({
     });
   }
 
+  function sanitizeUrl(url: string): string {
+    // Remove all whitespace (spaces, newlines, tabs) from the URL
+    return url.replace(/\s+/g, "").trim()
+  }
+
   function handleQrSave() {
     startQrTransition(async () => {
       try {
+        const cleanGcash = sanitizeUrl(gcashQrUrl)
+        const cleanMaya = sanitizeUrl(mayaQrUrl)
         await updateQRSettings({
-          gcash_qr_url: gcashQrUrl.trim() || null,
-          maya_qr_url: mayaQrUrl.trim() || null,
+          gcash_qr_url: cleanGcash || null,
+          maya_qr_url: cleanMaya || null,
         });
+        setGcashSaved(cleanGcash)
+        setMayaSaved(cleanMaya)
         toast.success("QR payment settings saved");
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to save QR settings");
+      }
+    });
+  }
+
+  function handleOwnerSave() {
+    if (!maxDiscountValid) {
+      toast.error("Max cashier discount must be between 0 and 100");
+      return;
+    }
+    startOwnerTransition(async () => {
+      try {
+        await updateOwnerSettings({
+          receipt_header: receiptHeader.trim() || null,
+          receipt_footer: receiptFooter.trim() || null,
+          max_cashier_discount_pct: maxDiscountNum,
+        });
+        toast.success("Receipt & discount settings saved");
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to save settings");
       }
     });
   }
@@ -131,20 +212,51 @@ export function OrganizationClient({
             <CardTitle className="text-sm font-medium">QR Payment Settings</CardTitle>
           </div>
           <CardDescription className="text-xs mt-1">
-            Paste the URL of your GCash or Maya merchant QR image. Customers scan it during checkout.
+            Upload or paste the URL of your GCash or Maya merchant QR image. Customers scan it during checkout.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-5 space-y-5">
           {/* GCash */}
           <div className="space-y-2">
-            <Label htmlFor="gcash-qr-url">GCash QR Image URL</Label>
-            <Input
-              id="gcash-qr-url"
-              type="url"
-              placeholder="https://..."
-              value={gcashQrUrl}
-              onChange={(e) => setGcashQrUrl(e.target.value)}
-            />
+            <Label>GCash QR Image</Label>
+            <div className="flex gap-2">
+              <Input
+                type="url"
+                placeholder="https://... or upload an image →"
+                value={gcashQrUrl}
+                onChange={(e) => setGcashQrUrl(e.target.value.replace(/\s+/g, ""))}
+                className="flex-1"
+              />
+              <input
+                ref={gcashFileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => handleQrUpload(e, 'gcash')}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={gcashUploading}
+                onClick={() => gcashFileRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-1.5" />
+                {gcashUploading ? "Uploading…" : "Upload"}
+              </Button>
+              {gcashQrUrl.trim() && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => setGcashQrUrl("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
             {gcashQrUrl.trim() && (
               <div className="rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Preview</p>
@@ -161,14 +273,45 @@ export function OrganizationClient({
 
           {/* Maya */}
           <div className="space-y-2">
-            <Label htmlFor="maya-qr-url">Maya QR Image URL</Label>
-            <Input
-              id="maya-qr-url"
-              type="url"
-              placeholder="https://..."
-              value={mayaQrUrl}
-              onChange={(e) => setMayaQrUrl(e.target.value)}
-            />
+            <Label>Maya QR Image</Label>
+            <div className="flex gap-2">
+              <Input
+                type="url"
+                placeholder="https://... or upload an image →"
+                value={mayaQrUrl}
+                onChange={(e) => setMayaQrUrl(e.target.value.replace(/\s+/g, ""))}
+                className="flex-1"
+              />
+              <input
+                ref={mayaFileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => handleQrUpload(e, 'maya')}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={mayaUploading}
+                onClick={() => mayaFileRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-1.5" />
+                {mayaUploading ? "Uploading…" : "Upload"}
+              </Button>
+              {mayaQrUrl.trim() && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => setMayaQrUrl("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
             {mayaQrUrl.trim() && (
               <div className="rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Preview</p>
@@ -188,6 +331,85 @@ export function OrganizationClient({
       <div className="flex justify-end">
         <Button onClick={handleQrSave} disabled={!isQrDirty || isQrPending}>
           {isQrPending ? "Saving…" : "Save QR Settings"}
+        </Button>
+      </div>
+
+      {/* Receipt & Discount Settings */}
+      <Card>
+        <CardHeader className="border-b border-border pb-4">
+          <div className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Receipt & Discount Settings</CardTitle>
+          </div>
+          <CardDescription className="text-xs mt-1">
+            Customize receipts and set discount limits for cashiers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-5">
+          {/* Max cashier discount */}
+          <div className="space-y-2">
+            <Label htmlFor="max-discount">Max Cashier Discount (%)</Label>
+            <div className="flex items-center gap-2">
+              <div className="relative w-36">
+                <Input
+                  id="max-discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={maxDiscountInput}
+                  onChange={(e) => setMaxDiscountInput(e.target.value)}
+                  className="pr-8"
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-muted-foreground">
+                  %
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Cashiers cannot exceed this discount limit
+              </div>
+            </div>
+            {!maxDiscountValid && maxDiscountInput !== "" && (
+              <p className="text-xs text-destructive">Enter a value between 0 and 100</p>
+            )}
+          </div>
+
+          {/* Receipt header */}
+          <div className="space-y-2">
+            <Label htmlFor="receipt-header">Receipt Header Message</Label>
+            <Textarea
+              id="receipt-header"
+              placeholder="e.g. Welcome to Our Store!"
+              value={receiptHeader}
+              onChange={(e) => setReceiptHeader(e.target.value)}
+              rows={2}
+              maxLength={42}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground">{receiptHeader.length}/42 characters — shown above the store name on receipts</p>
+          </div>
+
+          {/* Receipt footer */}
+          <div className="space-y-2">
+            <Label htmlFor="receipt-footer">Receipt Footer Message</Label>
+            <Textarea
+              id="receipt-footer"
+              placeholder="e.g. No exchange, no refund."
+              value={receiptFooter}
+              onChange={(e) => setReceiptFooter(e.target.value)}
+              rows={2}
+              maxLength={42}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground">{receiptFooter.length}/42 characters — shown at the bottom of receipts</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleOwnerSave} disabled={!isOwnerDirty || !maxDiscountValid || isOwnerPending}>
+          {isOwnerPending ? "Saving…" : "Save Receipt & Discount Settings"}
         </Button>
       </div>
 

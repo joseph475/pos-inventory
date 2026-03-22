@@ -50,6 +50,25 @@ export async function createTransaction(params: {
   const profile = await getProfile()
   const supabase = getAdminClient()
 
+  // Pre-checkout stock validation
+  const productIds = params.items.map((i) => i.product_id)
+  const { data: inventoryRows } = await supabase
+    .from('inventory')
+    .select('product_id, quantity')
+    .in('product_id', productIds)
+    .eq('branch_id', profile.branch_id)
+
+  const insufficientItems: string[] = []
+  for (const item of params.items) {
+    const inv = inventoryRows?.find((r) => r.product_id === item.product_id)
+    if (!inv || inv.quantity < item.quantity) {
+      insufficientItems.push(item.product_name)
+    }
+  }
+  if (insufficientItems.length > 0) {
+    throw new Error(`Insufficient stock for: ${insufficientItems.join(', ')}`)
+  }
+
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
     .insert({
@@ -114,6 +133,220 @@ export async function createTransaction(params: {
   revalidatePath('/inventory')
   revalidatePath('/inventory/adjustments')
   return { id: transaction.id }
+}
+
+export async function voidTransaction(id: string, reason: string): Promise<void> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) throw new Error('Profile not found')
+  if (!['manager', 'super_admin', 'owner'].includes(profile.role)) throw new Error('Forbidden')
+
+  // Get the transaction
+  const { data: tx } = await supabase
+    .from('transactions')
+    .select('id, branch_id, status')
+    .eq('id', id)
+    .single()
+
+  if (!tx) throw new Error('Transaction not found')
+  if (tx.status !== 'completed') throw new Error('Only completed transactions can be voided')
+
+  // Get items before voiding
+  const { data: txItems } = await supabase
+    .from('transaction_items')
+    .select('product_id, product_name, quantity')
+    .eq('transaction_id', id)
+
+  // Mark as voided
+  const { error: updateError } = await supabase
+    .from('transactions')
+    .update({
+      status: 'voided',
+      void_reason: reason,
+      voided_by: profile.id,
+      voided_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', 'completed')
+
+  if (updateError) throw new Error(updateError.message)
+
+  // Restore inventory
+  for (const item of txItems ?? []) {
+    const { data: inv } = await supabase
+      .from('inventory')
+      .select('quantity')
+      .eq('product_id', item.product_id)
+      .eq('branch_id', tx.branch_id)
+      .single()
+
+    if (inv) {
+      await supabase
+        .from('inventory')
+        .update({ quantity: inv.quantity + item.quantity })
+        .eq('product_id', item.product_id)
+        .eq('branch_id', tx.branch_id)
+    }
+
+    await supabase.from('inventory_movements').insert({
+      product_id: item.product_id,
+      branch_id: tx.branch_id,
+      type: 'adjustment',
+      quantity: item.quantity,
+      reference_id: id,
+      notes: `Void of transaction #${id.slice(0, 8)}: ${reason}`,
+      created_by: profile.id,
+    })
+  }
+
+  revalidateTag(CACHE_TAGS.INVENTORY, {})
+  revalidateTag(CACHE_TAGS.INVENTORY_MOVEMENTS, {})
+  revalidatePath('/inventory')
+  revalidatePath('/reports/transactions')
+}
+
+export type TransactionSummary = {
+  id: string
+  created_at: string
+  cashier_name: string
+  item_count: number
+  payment_method: string
+  total: number
+  discount_amount: number
+  status: 'completed' | 'voided' | 'held'
+  void_reason: string | null
+  items: Array<{
+    id: string
+    product_name: string
+    quantity: number
+    unit_price: number
+    discount_amount: number
+    total: number
+  }>
+}
+
+export async function getTransactions(filters: {
+  dateFrom: string
+  dateTo: string
+  paymentMethod?: string
+  status?: string
+  branchId?: string
+}): Promise<TransactionSummary[]> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile || !['manager', 'super_admin', 'owner'].includes(profile.role)) {
+    throw new Error('Forbidden')
+  }
+
+  let query = supabase
+    .from('transactions')
+    .select('id, created_at, cashier_id, payment_method, total, discount_amount, status, void_reason')
+    .gte('created_at', filters.dateFrom)
+    .lte('created_at', filters.dateTo + 'T23:59:59.999Z')
+    .order('created_at', { ascending: false })
+    .limit(500)
+
+  if (filters.paymentMethod) {
+    query = query.eq('payment_method', filters.paymentMethod as 'cash' | 'card' | 'split' | 'gcash' | 'maya')
+  }
+  if (filters.status) {
+    query = query.eq('status', filters.status as 'completed' | 'voided' | 'held')
+  }
+  if (filters.branchId) {
+    query = query.eq('branch_id', filters.branchId)
+  }
+
+  const { data: txns, error } = await query
+  if (error) throw new Error(error.message)
+
+  const transactions = (txns ?? []) as any[]
+
+  // Get cashier names
+  const cashierIds = [...new Set(transactions.map((t) => t.cashier_id as string))]
+  const cashierMap = new Map<string, string>()
+  if (cashierIds.length > 0) {
+    const { data: profileRows } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', cashierIds)
+    for (const p of profileRows ?? []) cashierMap.set(p.id, p.full_name)
+  }
+
+  // Get items for all transactions
+  const txnIds = transactions.map((t) => t.id as string)
+  const itemsMap = new Map<string, TransactionSummary['items']>()
+  if (txnIds.length > 0) {
+    const { data: allItems } = await supabase
+      .from('transaction_items')
+      .select('id, transaction_id, product_name, quantity, unit_price, discount_amount, total')
+      .in('transaction_id', txnIds)
+    for (const item of (allItems ?? []) as any[]) {
+      if (!itemsMap.has(item.transaction_id)) itemsMap.set(item.transaction_id, [])
+      itemsMap.get(item.transaction_id)!.push({
+        id: item.id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_amount: item.discount_amount,
+        total: item.total,
+      })
+    }
+  }
+
+  return transactions.map((tx) => {
+    const items = itemsMap.get(tx.id) ?? []
+    const item_count = items.reduce((s, i) => s + i.quantity, 0)
+    return {
+      id: tx.id,
+      created_at: tx.created_at,
+      cashier_name: cashierMap.get(tx.cashier_id) ?? 'Unknown',
+      item_count,
+      payment_method: tx.payment_method,
+      total: tx.total,
+      discount_amount: tx.discount_amount,
+      status: tx.status,
+      void_reason: tx.void_reason,
+      items,
+    }
+  })
+}
+
+export async function clearExpiredHeldOrders(): Promise<number> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: expired } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('status', 'held')
+    .lt('created_at', cutoff)
+
+  const ids = (expired ?? []).map((t) => t.id)
+  if (ids.length === 0) return 0
+
+  await supabase.from('transaction_items').delete().in('transaction_id', ids)
+  await supabase.from('transactions').delete().in('id', ids).eq('status', 'held')
+
+  return ids.length
 }
 
 export async function createHeldTransaction(params: {

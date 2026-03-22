@@ -19,6 +19,8 @@ import {
   ChevronDown,
   Store,
   Settings2,
+  History,
+  FileBarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -102,11 +104,16 @@ const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   {
-    type: "link",
+    type: "section",
     label: "Reports",
-    href: "/reports/sales",
     icon: TrendingUp,
+    defaultOpen: false,
     roles: ["super_admin", "owner", "manager"],
+    items: [
+      { label: "Sales", href: "/reports/sales", icon: BarChart3 },
+      { label: "Transaction History", href: "/reports/transactions", icon: History },
+      { label: "Z-Report", href: "/reports/z-report", icon: FileBarChart2 },
+    ],
   },
   {
     type: "section",

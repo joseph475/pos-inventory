@@ -80,6 +80,8 @@ Existing `loading.tsx` files:
 - `app/(dashboard)/settings/categories/loading.tsx`
 - `app/(dashboard)/settings/organization/loading.tsx`
 - `app/(dashboard)/reports/sales/loading.tsx`
+- `app/(dashboard)/reports/transactions/loading.tsx`
+- `app/(dashboard)/reports/z-report/loading.tsx`
 
 All skeletons import `Skeleton` from `@/components/ui/skeleton`.
 
@@ -90,12 +92,14 @@ Key tables: `organizations`, `branches`, `profiles`, `categories`, `products`, `
 
 The `profiles` table links Clerk users (`clerk_user_id`) to roles and branches. Roles: `owner`, `super_admin`, `manager`, `cashier`.
 
-Migrations (5 total):
+Migrations (7 total):
 1. `001_initial_schema.sql` — Tables, RLS, indexes
 2. `002_seed_data.sql` — Initial seed data
 3. `003_add_currency_to_organizations.sql` — Currency field
 4. `004_add_tax_rate_to_organizations.sql` — Tax rate field
 5. `005_add_owner_role.sql` — Owner role support
+6. `006_add_qr_payment.sql` — Adds `gcash`/`maya` to `payment_method` enum; adds `gcash_qr_url`/`maya_qr_url` TEXT columns to `organizations`
+7. `007_production_improvements.sql` — Adds `void_reason`/`voided_by`/`voided_at` to `transactions`; adds `receipt_header`/`receipt_footer`/`max_cashier_discount_pct` to `organizations`
 
 **Important**: The `Database` type in `types/database.ts` has empty `Relationships: []` for all tables. Supabase join queries (e.g. `.select('*, transaction_items(...)')`) return `never` type — always cast with `as any[]` and re-type manually.
 
@@ -186,8 +190,8 @@ When a table has multiple FK columns pointing to the same table, Supabase requir
 ## Role-Based Access
 - `cashier`: POS only, cannot approve transfers, cannot access settings
 - `manager`: All operations except user/branch management
-- `super_admin`: Full access including user/branch management
-- `owner`: Top-level role, same as super_admin or broader access
+- `super_admin`: Full access including user/branch management, but NOT organization settings
+- `owner`: Top-level role — only role that can access **Settings → Organization** (currency, tax rate, QR payment URLs)
 
 Role checks should be done **server-side** in server actions (throw error) AND **client-side** (hide UI). Get role from the `profiles` table via `clerk_user_id`.
 
@@ -205,6 +209,22 @@ Zustand store for POS cart. Key methods:
 - `loadHeldOrder(items)` — restores a held transaction into the cart
 - `subtotal()`, `totalDiscount()`, `tax()`, `total()` — computed values (call as functions)
 - Cart `discount` is a percentage (0–100); `totalDiscount()` includes both per-item and overall discounts
+
+## POS Payment Methods
+Supported: `cash`, `card`, `split`, `gcash`, `maya`.
+
+- `gcash` and `maya` buttons only appear in the POS if the corresponding QR URL is configured in org settings.
+- GCash/Maya payments show a QR image + total amount in the payment dialog. Cashier confirms manually after customer scans.
+- QR URLs are stored in `organizations.gcash_qr_url` / `organizations.maya_qr_url` and fetched via `getOrgSettings()`.
+- `POSClient` accepts `gcashQrUrl` and `mayaQrUrl` props passed from the server page.
+
+## Barcode Scanner Support
+POS search input has an `onKeyDown` handler. When Enter is pressed:
+1. Checks for exact barcode match across all products (highest priority)
+2. Falls back to adding if exactly one filtered result exists
+3. Shows error toast if no match found
+
+Scanners act as keyboards (fast-type + Enter), so no extra setup is needed — just focus the search input.
 
 ## UserProfileProvider
 `lib/context/user-profile.tsx` — provides `useUserProfile()` hook with `{ profile, branch, loading, refetch }`.
@@ -227,15 +247,17 @@ When `initialProfile` is provided, the client-side `getMyProfile()` fetch is ski
 | `lib/actions/inventory.ts` | Stock adjustments, `getPOSProducts` |
 | `lib/actions/purchasing.ts` | Purchase orders + suppliers |
 | `lib/actions/users.ts` | User profile management |
-| `lib/actions/organization.ts` | Org settings (currency, tax rate, name) |
-| `lib/actions/reports.ts` | Sales report data queries |
+| `lib/actions/organization.ts` | Org settings (currency, tax rate, QR URLs, receipt header/footer, max cashier discount) — `updateOwnerSettings` for owner-only fields |
+| `lib/actions/transactions.ts` | POS sale + hold + void transactions, `getTransactions`, `clearExpiredHeldOrders` |
+| `lib/actions/reports.ts` | Sales report data queries + `getZReport(date)` |
 | `lib/actions/demo.ts` | Demo mode login helpers |
 | `lib/context/user-profile.tsx` | `useUserProfile()` hook — SSR-seeded profile + branch |
 | `lib/context/currency.tsx` | Currency formatting context |
 | `lib/context/tax-rate-sync.tsx` | Syncs org tax rate to cart store |
 | `lib/cache-tags.ts` | Centralized cache tag string constants |
 | `types/database.ts` | All DB row types + convenience exports |
-| `components/pos/payment-dialog.tsx` | POS payment confirmation → calls `createTransaction` |
+| `components/pos/payment-dialog.tsx` | POS payment confirmation → calls `createTransaction`; shows QR image for GCash/Maya |
+| `components/pos/receipt-dialog.tsx` | Receipt preview + print after transaction |
 | `components/pos/hold-order-dialog.tsx` | Hold order → calls `createHeldTransaction` |
 | `components/pos/held-orders-sheet.tsx` | Resume/delete held orders from DB |
 | `components/auth/demo-login-buttons.tsx` | Demo mode role quick-login buttons |

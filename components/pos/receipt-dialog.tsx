@@ -36,6 +36,8 @@ export interface ReceiptData {
   change?: number
   splitCash?: number
   splitCard?: number
+  receiptHeader?: string
+  receiptFooter?: string
   formatCurrency: (n: number) => string
 }
 
@@ -84,6 +86,16 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
         padding: "8px 0",
       }}
     >
+      {/* Custom header */}
+      {data.receiptHeader && (
+        <>
+          <ReceiptLine>
+            {"".padStart(Math.floor((42 - Math.min(data.receiptHeader.length, 42)) / 2))}
+            {data.receiptHeader.slice(0, 42)}
+          </ReceiptLine>
+          <Divider char="-" />
+        </>
+      )}
       {/* Header */}
       <Divider />
       <ReceiptLine>{"".padStart(Math.floor((42 - data.branchName.length) / 2)) + data.branchName}</ReceiptLine>
@@ -102,7 +114,7 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
       <Divider />
 
       {/* Meta */}
-      <ReceiptLine>{`Date: ${date}  Time: ${time}`}</ReceiptLine>
+      <ReceiptLine><span suppressHydrationWarning>{`Date: ${date}  Time: ${time}`}</span></ReceiptLine>
       <ReceiptLine>{`Receipt #: ${shortId}`}</ReceiptLine>
       <ReceiptLine>{`Cashier: ${data.cashierName}`}</ReceiptLine>
       <Divider char="-" />
@@ -155,6 +167,15 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
 
       {/* Footer */}
       <ReceiptLine>{"".padStart(9)}Thank you for your purchase!</ReceiptLine>
+      {data.receiptFooter && (
+        <>
+          <Divider char="-" />
+          <ReceiptLine>
+            {"".padStart(Math.floor((42 - Math.min(data.receiptFooter.length, 42)) / 2))}
+            {data.receiptFooter.slice(0, 42)}
+          </ReceiptLine>
+        </>
+      )}
       <Divider />
     </div>
   )

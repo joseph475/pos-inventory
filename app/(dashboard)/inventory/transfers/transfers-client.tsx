@@ -116,7 +116,7 @@ function TransfersTable({
               {t.items}
             </TableCell>
             <TableCell className="text-sm text-muted-foreground">{t.created_by}</TableCell>
-            <TableCell className="font-mono text-xs text-muted-foreground">
+            <TableCell className="font-mono text-xs text-muted-foreground" suppressHydrationWarning>
               {new Date(t.created_at).toLocaleDateString()}
             </TableCell>
             <TableCell className="pr-4">

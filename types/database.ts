@@ -16,6 +16,9 @@ export type Database = {
           tax_rate: number;
           gcash_qr_url: string | null;
           maya_qr_url: string | null;
+          receipt_header: string | null;
+          receipt_footer: string | null;
+          max_cashier_discount_pct: number;
           created_at: string;
         };
         Insert: {
@@ -26,6 +29,9 @@ export type Database = {
           tax_rate?: number;
           gcash_qr_url?: string | null;
           maya_qr_url?: string | null;
+          receipt_header?: string | null;
+          receipt_footer?: string | null;
+          max_cashier_discount_pct?: number;
           created_at?: string;
         };
         Update: {
@@ -36,6 +42,9 @@ export type Database = {
           tax_rate?: number;
           gcash_qr_url?: string | null;
           maya_qr_url?: string | null;
+          receipt_header?: string | null;
+          receipt_footer?: string | null;
+          max_cashier_discount_pct?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -364,6 +373,9 @@ export type Database = {
           payment_method: "cash" | "card" | "split" | "gcash" | "maya";
           status: "completed" | "voided" | "held";
           notes: string | null;
+          void_reason: string | null;
+          voided_by: string | null;
+          voided_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -377,6 +389,9 @@ export type Database = {
           payment_method: "cash" | "card" | "split" | "gcash" | "maya";
           status?: "completed" | "voided" | "held";
           notes?: string | null;
+          void_reason?: string | null;
+          voided_by?: string | null;
+          voided_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -390,6 +405,9 @@ export type Database = {
           payment_method?: "cash" | "card" | "split" | "gcash" | "maya";
           status?: "completed" | "voided" | "held";
           notes?: string | null;
+          void_reason?: string | null;
+          voided_by?: string | null;
+          voided_at?: string | null;
           created_at?: string;
         };
         Relationships: [];

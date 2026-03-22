@@ -162,7 +162,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           Dashboard
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground" suppressHydrationWarning>
           Overview for today —{" "}
           {new Date().toLocaleDateString("en-US", {
             weekday: "long",

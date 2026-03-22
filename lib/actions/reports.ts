@@ -197,6 +197,70 @@ export async function getSalesReport(range: string): Promise<SalesReportData> {
   }
 }
 
+// ─── Z-Report ──────────────────────────────────────────────────────────────────
+
+export type ZReportData = {
+  date: string
+  salesCount: number
+  totalRevenue: number
+  totalDiscounts: number
+  avgTransactionValue: number
+  voidCount: number
+  voidedTotal: number
+  byPaymentMethod: { method: string; count: number; total: number }[]
+}
+
+export async function getZReport(date: string): Promise<ZReportData> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+
+  const dayStart = `${date}T00:00:00.000Z`
+  const dayEnd = `${date}T23:59:59.999Z`
+
+  const { data: txns, error } = await supabase
+    .from('transactions')
+    .select('id, total, discount_amount, payment_method, status')
+    .gte('created_at', dayStart)
+    .lte('created_at', dayEnd)
+
+  if (error) throw new Error(error.message)
+
+  const all = (txns ?? []) as any[]
+  const completed = all.filter((t) => t.status === 'completed')
+  const voided = all.filter((t) => t.status === 'voided')
+
+  const totalRevenue = completed.reduce((s: number, t: any) => s + t.total, 0)
+  const totalDiscounts = completed.reduce((s: number, t: any) => s + t.discount_amount, 0)
+  const salesCount = completed.length
+  const avgTransactionValue = salesCount > 0 ? totalRevenue / salesCount : 0
+  const voidCount = voided.length
+  const voidedTotal = voided.reduce((s: number, t: any) => s + t.total, 0)
+
+  const methodMap = new Map<string, { count: number; total: number }>()
+  for (const t of completed) {
+    const entry = methodMap.get(t.payment_method) ?? { count: 0, total: 0 }
+    entry.count += 1
+    entry.total += t.total
+    methodMap.set(t.payment_method, entry)
+  }
+  const byPaymentMethod = Array.from(methodMap.entries())
+    .map(([method, vals]) => ({ method, count: vals.count, total: vals.total }))
+    .sort((a, b) => b.total - a.total)
+
+  return {
+    date,
+    salesCount,
+    totalRevenue,
+    totalDiscounts,
+    avgTransactionValue,
+    voidCount,
+    voidedTotal,
+    byPaymentMethod,
+  }
+}
+
 // ─── Dashboard stats ───────────────────────────────────────────────────────────
 
 export type DashboardData = {

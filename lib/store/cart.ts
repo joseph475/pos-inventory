@@ -5,7 +5,8 @@ interface CartItem {
   product: Product;
   quantity: number;
   unit_price: number;
-  discount_amount: number;
+  discount_amount: number; // flat amount (computed)
+  discount_pct: number;    // percentage 0-100 (source of truth)
 }
 
 interface CartStore {
@@ -15,7 +16,7 @@ interface CartStore {
   addItem: (product: Product) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
-  updateItemDiscount: (productId: string, discount: number) => void;
+  updateItemDiscount: (productId: string, pct: number) => void;
   setDiscount: (discount: number) => void;
   setTaxRate: (rate: number) => void;
   clearCart: () => void;
@@ -37,11 +38,12 @@ export const useCartStore = create<CartStore>((set, get) => ({
     const existing = items.find((i) => i.product.id === product.id);
     if (existing) {
       set({
-        items: items.map((i) =>
-          i.product.id === product.id
-            ? { ...i, quantity: i.quantity + 1 }
-            : i
-        ),
+        items: items.map((i) => {
+          if (i.product.id !== product.id) return i;
+          const quantity = i.quantity + 1;
+          const discount_amount = i.unit_price * quantity * (i.discount_pct / 100);
+          return { ...i, quantity, discount_amount };
+        }),
       });
     } else {
       set({
@@ -52,6 +54,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
             quantity: 1,
             unit_price: product.selling_price,
             discount_amount: 0,
+            discount_pct: 0,
           },
         ],
       });
@@ -67,17 +70,22 @@ export const useCartStore = create<CartStore>((set, get) => ({
       return;
     }
     set({
-      items: get().items.map((i) =>
-        i.product.id === productId ? { ...i, quantity } : i
-      ),
+      items: get().items.map((i) => {
+        if (i.product.id !== productId) return i;
+        const discount_amount = i.unit_price * quantity * (i.discount_pct / 100);
+        return { ...i, quantity, discount_amount };
+      }),
     });
   },
 
-  updateItemDiscount: (productId, discount) =>
+  updateItemDiscount: (productId, pct) =>
     set({
-      items: get().items.map((i) =>
-        i.product.id === productId ? { ...i, discount_amount: discount } : i
-      ),
+      items: get().items.map((i) => {
+        if (i.product.id !== productId) return i;
+        const discount_pct = pct;
+        const discount_amount = i.unit_price * i.quantity * (pct / 100);
+        return { ...i, discount_pct, discount_amount };
+      }),
     }),
 
   setDiscount: (discount) => set({ discount }),
@@ -94,6 +102,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
         quantity: item.quantity,
         unit_price: item.unit_price,
         discount_amount: item.discount_amount,
+        discount_pct: 0,
       })),
     }),
 

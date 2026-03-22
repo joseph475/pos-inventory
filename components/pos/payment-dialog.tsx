@@ -2,11 +2,12 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { CheckCircle2, QrCode } from "lucide-react"
+import { CheckCircle2, QrCode, Timer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,8 @@ interface PaymentDialogProps {
   paymentMethod: PaymentMethod
   gcashQrUrl?: string | null
   mayaQrUrl?: string | null
+  receiptHeader?: string | null
+  receiptFooter?: string | null
 }
 
 function paymentMethodLabel(method: PaymentMethod): string {
@@ -43,6 +46,8 @@ export function PaymentDialog({
   paymentMethod,
   gcashQrUrl,
   mayaQrUrl,
+  receiptHeader,
+  receiptFooter,
 }: PaymentDialogProps) {
   const { items, clearCart, subtotal, totalDiscount, tax, total } = useCartStore()
   const { formatCurrency, taxRate, currencySymbol } = useCurrency()
@@ -52,8 +57,34 @@ export function PaymentDialog({
   const [splitCash, setSplitCash] = React.useState("")
   const [splitCard, setSplitCard] = React.useState("")
   const [isProcessing, setIsProcessing] = React.useState(false)
+  const [qrConfirmed, setQrConfirmed] = React.useState(false)
+  const [qrElapsed, setQrElapsed] = React.useState(0)
   const [receiptData, setReceiptData] = React.useState<ReceiptData | null>(null)
   const [receiptOpen, setReceiptOpen] = React.useState(false)
+
+  const isQrPayment = paymentMethod === "gcash" || paymentMethod === "maya"
+
+  // Timer for QR payments
+  React.useEffect(() => {
+    if (!isQrPayment || !open) {
+      setQrElapsed(0)
+      return
+    }
+    const startTime = Date.now()
+    const interval = setInterval(() => {
+      setQrElapsed(Math.floor((Date.now() - startTime) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [isQrPayment, open])
+
+  // Reset QR confirmation when payment method or dialog state changes
+  React.useEffect(() => {
+    if (!open) setQrConfirmed(false)
+  }, [open])
+  React.useEffect(() => {
+    setQrConfirmed(false)
+    setQrElapsed(0)
+  }, [paymentMethod])
 
   const orderTotal = total()
   const orderSubtotal = subtotal()
@@ -66,21 +97,20 @@ export function PaymentDialog({
 
   const splitCashNum = parseFloat(splitCash) || 0
   const splitCardNum = parseFloat(splitCard) || 0
-  const splitTotal = splitCashNum + splitCardNum
+  const splitTotal = Math.round((splitCashNum + splitCardNum) * 100) / 100
   const splitRemaining = orderTotal - splitTotal
 
   const isCashValid =
     paymentMethod === "cash" ? cashTenderedNum >= orderTotal : true
   const isSplitValid =
     paymentMethod === "split"
-      ? Math.abs(splitRemaining) < 0.01
+      ? Math.abs(splitRemaining) < 0.005
       : true
   const canConfirm =
     paymentMethod === "card" ||
-    paymentMethod === "gcash" ||
-    paymentMethod === "maya" ||
     (paymentMethod === "cash" && isCashValid) ||
-    (paymentMethod === "split" && isSplitValid)
+    (paymentMethod === "split" && isSplitValid) ||
+    (isQrPayment && qrConfirmed)
 
   async function handleConfirm() {
     if (!canConfirm) return
@@ -126,6 +156,8 @@ export function PaymentDialog({
         change: paymentMethod === "cash" ? change : undefined,
         splitCash: paymentMethod === "split" ? splitCashNum : undefined,
         splitCard: paymentMethod === "split" ? splitCardNum : undefined,
+        receiptHeader: receiptHeader ?? undefined,
+        receiptFooter: receiptFooter ?? undefined,
         formatCurrency,
       })
       setReceiptOpen(true)
@@ -139,9 +171,13 @@ export function PaymentDialog({
         description: `${itemCount} item${itemCount !== 1 ? "s" : ""} — ${formatCurrency(orderTotal)}`,
       })
     } catch (err) {
-      toast.error("Transaction failed", {
-        description: err instanceof Error ? err.message : "Something went wrong",
-      })
+      const message = err instanceof Error ? err.message : "Something went wrong"
+      if (message.startsWith("Insufficient stock for:")) {
+        toast.error("Stock unavailable", { description: message })
+      } else {
+        toast.error("Transaction failed", { description: message })
+      }
+      // Dialog stays open so cashier can adjust cart
     } finally {
       setIsProcessing(false)
     }
@@ -156,6 +192,12 @@ export function PaymentDialog({
       }
       onOpenChange(value)
     }
+  }
+
+  function formatElapsed(seconds: number): string {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return m > 0 ? `${m}m ${s}s` : `${s}s`
   }
 
   return (
@@ -253,11 +295,17 @@ export function PaymentDialog({
         )}
 
         {/* GCash / Maya QR payment */}
-        {(paymentMethod === "gcash" || paymentMethod === "maya") && (
+        {isQrPayment && (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
             <div className="flex items-center gap-2 text-sm font-medium">
               <QrCode className="h-4 w-4 text-muted-foreground" />
               <span>Scan {paymentMethodLabel(paymentMethod)} QR to pay</span>
+              {qrElapsed > 0 && (
+                <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                  <Timer className="h-3 w-3" />
+                  {formatElapsed(qrElapsed)}
+                </span>
+              )}
             </div>
             {(paymentMethod === "gcash" ? gcashQrUrl : mayaQrUrl) ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -270,7 +318,16 @@ export function PaymentDialog({
               <p className="text-xs text-muted-foreground">QR image not configured.</p>
             )}
             <p className="text-xl font-bold text-foreground">{formatCurrency(orderTotal)}</p>
-            <p className="text-xs text-muted-foreground">Awaiting payment confirmation…</p>
+            <div className="flex items-center gap-2 w-full">
+              <Checkbox
+                id="qr-confirmed"
+                checked={qrConfirmed}
+                onCheckedChange={(checked) => setQrConfirmed(!!checked)}
+              />
+              <Label htmlFor="qr-confirmed" className="text-sm cursor-pointer">
+                I confirm the customer has scanned and paid
+              </Label>
+            </div>
           </div>
         )}
 
@@ -319,7 +376,7 @@ export function PaymentDialog({
 
             <div
               className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium ${
-                Math.abs(splitRemaining) < 0.01
+                Math.abs(splitRemaining) < 0.005
                   ? "bg-green-500/10 text-green-600 dark:text-green-400"
                   : splitRemaining > 0
                   ? "bg-muted text-muted-foreground"
@@ -327,14 +384,14 @@ export function PaymentDialog({
               }`}
             >
               <span>
-                {Math.abs(splitRemaining) < 0.01
+                {Math.abs(splitRemaining) < 0.005
                   ? "Balanced"
                   : splitRemaining > 0
                   ? "Remaining"
                   : "Over by"}
               </span>
               <span>
-                {Math.abs(splitRemaining) < 0.01
+                {Math.abs(splitRemaining) < 0.005
                   ? "Ready to process"
                   : formatCurrency(Math.abs(splitRemaining))}
               </span>

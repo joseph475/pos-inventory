@@ -73,12 +73,20 @@ function buildCategoryTabs(products: POSProduct[]): CategoryTab[] {
 
 export function POSClient({
   initialProducts,
+  userRole,
   gcashQrUrl,
   mayaQrUrl,
+  maxCashierDiscountPct,
+  receiptHeader,
+  receiptFooter,
 }: {
   initialProducts: POSProduct[]
+  userRole: string
   gcashQrUrl?: string | null
   mayaQrUrl?: string | null
+  maxCashierDiscountPct: number
+  receiptHeader?: string | null
+  receiptFooter?: string | null
 }) {
   const { formatCurrency, taxRate } = useCurrency()
 
@@ -88,6 +96,7 @@ export function POSClient({
     addItem,
     removeItem,
     updateQuantity,
+    updateItemDiscount,
     setDiscount,
     clearCart,
     subtotal,
@@ -103,9 +112,17 @@ export function POSClient({
   const tabsScrollRef = React.useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = React.useState(false)
   const [canScrollRight, setCanScrollRight] = React.useState(false)
+  const searchRef = React.useRef<HTMLInputElement>(null)
 
   // Mobile cart drawer state
   const [cartOpen, setCartOpen] = React.useState(false)
+
+  // Held orders sheet controlled state (for keyboard shortcut)
+  const [heldOrdersOpen, setHeldOrdersOpen] = React.useState(false)
+
+  // Item-level discount UI
+  const [itemDiscountTarget, setItemDiscountTarget] = React.useState<string | null>(null)
+  const [itemDiscountInput, setItemDiscountInput] = React.useState("")
 
   function updateScrollState() {
     const el = tabsScrollRef.current
@@ -117,6 +134,27 @@ export function POSClient({
   React.useEffect(() => {
     updateScrollState()
   }, [categories])
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "F2") {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (
+        e.key === "Escape" &&
+        document.activeElement === searchRef.current &&
+        search
+      ) {
+        setSearch("")
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "h") {
+        e.preventDefault()
+        setHeldOrdersOpen((prev) => !prev)
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [search])
 
   function scrollTabs(dir: "left" | "right") {
     const el = tabsScrollRef.current
@@ -151,12 +189,19 @@ export function POSClient({
   }, [search, activeCategory, initialProducts])
 
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0)
+  const isCashier = userRole === "cashier"
 
   function handleDiscountChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value
     setDiscountInput(val)
     const num = parseFloat(val)
     if (!isNaN(num) && num >= 0 && num <= 100) {
+      if (isCashier && num > maxCashierDiscountPct) {
+        setDiscount(maxCashierDiscountPct)
+        setDiscountInput(String(maxCashierDiscountPct))
+        toast.warning(`Discount capped at ${maxCashierDiscountPct}% for cashiers`)
+        return
+      }
       setDiscount(num)
     } else if (val === "" || val === "0") {
       setDiscount(0)
@@ -199,6 +244,29 @@ export function POSClient({
     if (filteredProducts.length === 0) {
       toast.error("No product found", { description: q })
     }
+  }
+
+  function openItemDiscount(productId: string, currentPct: number) {
+    if (itemDiscountTarget === productId) {
+      setItemDiscountTarget(null)
+      setItemDiscountInput("")
+      return
+    }
+    setItemDiscountTarget(productId)
+    setItemDiscountInput(currentPct > 0 ? String(currentPct) : "")
+  }
+
+  function applyItemDiscount(productId: string) {
+    const num = parseFloat(itemDiscountInput)
+    const pct = isNaN(num) ? 0 : Math.min(100, Math.max(0, num))
+    if (isCashier && pct > maxCashierDiscountPct) {
+      updateItemDiscount(productId, maxCashierDiscountPct)
+      toast.warning(`Discount capped at ${maxCashierDiscountPct}% for cashiers`)
+    } else {
+      updateItemDiscount(productId, pct)
+    }
+    setItemDiscountTarget(null)
+    setItemDiscountInput("")
   }
 
   const paymentMethods: {
@@ -274,22 +342,76 @@ export function POSClient({
           <div className="space-y-0 divide-y divide-border">
             {items.map((item) => {
               const itemTotal = item.unit_price * item.quantity - item.discount_amount
+              const isDiscountOpen = itemDiscountTarget === item.product.id
               return (
                 <div key={item.product.id} className="flex flex-col gap-2 px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <span className="flex-1 text-sm font-medium leading-snug text-foreground">
                       {item.product.name}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => removeItem(item.product.id)}
-                      aria-label={`Remove ${item.product.name}`}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => openItemDiscount(item.product.id, item.discount_pct)}
+                        aria-label="Set item discount"
+                        className={cn(
+                          "text-muted-foreground",
+                          item.discount_pct > 0 && "text-orange-500 dark:text-orange-400"
+                        )}
+                      >
+                        <Percent className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => removeItem(item.product.id)}
+                        aria-label={`Remove ${item.product.name}`}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
+
+                  {/* Inline item discount input */}
+                  {isDiscountOpen && (
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-2 py-1.5">
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          placeholder="0"
+                          value={itemDiscountInput}
+                          onChange={(e) => setItemDiscountInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") applyItemDiscount(item.product.id)
+                            if (e.key === "Escape") { setItemDiscountTarget(null); setItemDiscountInput("") }
+                          }}
+                          className="h-6 pr-6 text-right text-sm"
+                          autoFocus
+                        />
+                        <Percent className="pointer-events-none absolute inset-y-0 right-1.5 my-auto h-3 w-3 text-muted-foreground" />
+                      </div>
+                      <Button
+                        size="xs"
+                        onClick={() => applyItemDiscount(item.product.id)}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Apply
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => { setItemDiscountTarget(null); setItemDiscountInput("") }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between gap-3">
                     {/* Quantity controls */}
@@ -323,7 +445,15 @@ export function POSClient({
                       <span className="text-xs text-muted-foreground">
                         {formatCurrency(item.unit_price)} each
                       </span>
-                      <span className="text-sm font-semibold text-foreground">
+                      {item.discount_pct > 0 && (
+                        <span className="text-[10px] text-orange-500 dark:text-orange-400">
+                          {item.discount_pct}% off
+                        </span>
+                      )}
+                      <span className={cn(
+                        "text-sm font-semibold",
+                        item.discount_pct > 0 ? "text-orange-500 dark:text-orange-400" : "text-foreground"
+                      )}>
                         {formatCurrency(itemTotal)}
                       </span>
                     </div>
@@ -447,14 +577,15 @@ export function POSClient({
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute inset-y-0 left-2.5 my-auto h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search products or scan barcode…"
+                  ref={searchRef}
+                  placeholder="Search products or scan barcode… (F2)"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   className="pl-8"
                 />
               </div>
-              <HeldOrdersSheet />
+              <HeldOrdersSheet open={heldOrdersOpen} onOpenChange={setHeldOrdersOpen} />
             </div>
           </div>
 
@@ -623,6 +754,8 @@ export function POSClient({
         paymentMethod={paymentMethod}
         gcashQrUrl={gcashQrUrl}
         mayaQrUrl={mayaQrUrl}
+        receiptHeader={receiptHeader}
+        receiptFooter={receiptFooter}
       />
       <HoldOrderDialog
         open={holdDialogOpen}
