@@ -183,9 +183,9 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
           </DialogHeader>
 
           {/* Scrollable receipt preview — mimics thermal paper slip */}
-          <div className="max-h-[60vh] overflow-y-auto rounded-lg bg-muted/40 p-4">
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg bg-muted/40 p-4 flex flex-col items-center">
             <div
-              className="mx-auto overflow-hidden rounded-sm shadow-md"
+              className="overflow-hidden rounded-sm shadow-md"
               style={{ width: "340px", background: "#fff" }}
             >
               {/* Torn-edge top */}
