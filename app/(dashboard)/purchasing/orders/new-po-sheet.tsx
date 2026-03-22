@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
+import { z } from "zod/v4"
 import { Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -72,11 +72,22 @@ interface Props {
 // ---------------------------------------------------------------------------
 export function NewPOSheet({ suppliers, branches, products, userBranchId, userRole, onSuccess }: Props) {
   const { formatCurrency, currencyCode, locale } = useCurrency()
-  const currencySymbol = new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode })
-    .formatToParts(0)
-    .find((p) => p.type === 'currency')?.value ?? currencyCode
+  const currencySymbol = React.useMemo(
+    () =>
+      new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode })
+        .formatToParts(0)
+        .find((p) => p.type === 'currency')?.value ?? currencyCode,
+    [locale, currencyCode],
+  )
   const [open, setOpen] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
+
+  const emptyDefaults: FormValues = {
+    supplier_id: "",
+    branch_id: userBranchId ?? "",
+    notes: "",
+    items: [{ product_id: "", quantity_ordered: undefined as unknown as number, unit_cost: undefined as unknown as number }],
+  }
 
   const {
     register,
@@ -88,12 +99,7 @@ export function NewPOSheet({ suppliers, branches, products, userBranchId, userRo
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      supplier_id: "",
-      branch_id: userBranchId ?? "",
-      notes: "",
-      items: [{ product_id: "", quantity_ordered: undefined as unknown as number, unit_cost: undefined as unknown as number }],
-    },
+    defaultValues: emptyDefaults,
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" })
@@ -112,12 +118,7 @@ export function NewPOSheet({ suppliers, branches, products, userBranchId, userRo
 
   function handleOpenChange(next: boolean) {
     if (!next) {
-      reset({
-        supplier_id: "",
-        branch_id: userBranchId ?? "",
-        notes: "",
-        items: [{ product_id: "", quantity_ordered: undefined as unknown as number, unit_cost: undefined as unknown as number }],
-      })
+      reset(emptyDefaults)
     }
     setOpen(next)
   }

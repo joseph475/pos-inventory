@@ -18,7 +18,7 @@ export default function SignInPage() {
             <DemoLoginButtons />
           </div>
         )}
-        <SignIn forceRedirectUrl="/dashboard" />
+        <SignIn forceRedirectUrl="/api/auth/redirect" />
       </div>
     </div>
   );

@@ -46,6 +46,8 @@ import type { Branch } from "@/types/database";
 
 interface BranchesClientProps {
   initialBranches: Branch[];
+  canAddBranch: boolean;
+  canEditBranch: boolean;
 }
 
 const TIMEZONES = [
@@ -191,7 +193,7 @@ function BranchDialog({ branch, open, onOpenChange, onSaved }: BranchDialogProps
   );
 }
 
-export function BranchesClient({ initialBranches }: BranchesClientProps) {
+export function BranchesClient({ initialBranches, canAddBranch, canEditBranch }: BranchesClientProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingBranch, setEditingBranch] = React.useState<Branch | undefined>();
@@ -216,10 +218,12 @@ export function BranchesClient({ initialBranches }: BranchesClientProps) {
             Manage your store locations
           </p>
         </div>
-        <Button onClick={openAdd}>
-          <Plus className="h-4 w-4" />
-          Add Branch
-        </Button>
+        {canAddBranch && (
+          <Button onClick={openAdd}>
+            <Plus className="h-4 w-4" />
+            Add Branch
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -274,24 +278,30 @@ export function BranchesClient({ initialBranches }: BranchesClientProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="pr-4">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={<Button variant="ghost" size="icon-sm" aria-label="Actions" />}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(branch)}>
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive">
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {canEditBranch && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={<Button variant="ghost" size="icon-sm" aria-label="Actions" />}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(branch)}>
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            {canAddBranch && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem variant="destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

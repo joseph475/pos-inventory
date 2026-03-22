@@ -2,8 +2,6 @@ import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
-import { getPOSProducts } from "@/lib/actions/inventory"
-import { POSClient } from "./pos-client"
 
 function getAdminClient() {
   return createClient<Database>(
@@ -12,18 +10,17 @@ function getAdminClient() {
   )
 }
 
-export default async function POSPage() {
+export async function GET() {
   const { userId } = await auth()
   if (!userId) redirect("/sign-in")
 
   const supabase = getAdminClient()
   const { data: profile } = await supabase
     .from("profiles")
-    .select("branch_id, role")
+    .select("role")
     .eq("clerk_user_id", userId)
     .single()
 
-  const products = await getPOSProducts(profile?.branch_id ?? null)
-
-  return <POSClient initialProducts={products} />
+  if (profile?.role === "cashier") redirect("/pos")
+  redirect("/dashboard")
 }

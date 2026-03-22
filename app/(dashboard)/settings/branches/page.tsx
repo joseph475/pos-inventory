@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database, Branch } from "@/types/database";
 import { BranchesClient } from "./branches-client";
@@ -10,7 +12,23 @@ function getAdminClient() {
 }
 
 export default async function BranchesPage() {
+  const { userId } = await auth();
+  if (!userId) redirect("/sign-in");
+
   const supabase = getAdminClient();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("clerk_user_id", userId)
+    .single();
+
+  if (!["super_admin", "owner"].includes(profile?.role ?? "")) {
+    redirect("/dashboard");
+  }
+
+  const canAddBranch = profile?.role === "super_admin";
+  const canEditBranch = profile?.role === "super_admin" || profile?.role === "owner";
 
   const { data } = await supabase
     .from("branches")
@@ -20,5 +38,5 @@ export default async function BranchesPage() {
 
   const branches: Branch[] = (data ?? []) as Branch[];
 
-  return <BranchesClient initialBranches={branches} />;
+  return <BranchesClient initialBranches={branches} canAddBranch={canAddBranch} canEditBranch={canEditBranch} />;
 }

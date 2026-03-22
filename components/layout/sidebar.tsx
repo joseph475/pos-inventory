@@ -55,19 +55,21 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+    roles: ["super_admin", "owner", "manager"],
   },
   {
     type: "link",
     label: "POS",
     href: "/pos",
     icon: ShoppingCart,
-    roles: ["manager", "cashier"],
+    roles: ["owner", "manager", "cashier"],
   },
   {
     type: "section",
     label: "Inventory",
     icon: Package,
     defaultOpen: false,
+    roles: ["owner", "manager", "cashier"],
     items: [
       { label: "Products", href: "/inventory/products", icon: Package },
       { label: "Stock Levels", href: "/inventory/stock", icon: BarChart3 },
@@ -80,6 +82,7 @@ const NAV_ENTRIES: NavEntry[] = [
         label: "Transfers",
         href: "/inventory/transfers",
         icon: ArrowLeftRight,
+        roles: ["owner", "manager"],
       },
     ],
   },
@@ -88,6 +91,7 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Purchasing",
     icon: Truck,
     defaultOpen: false,
+    roles: ["owner", "manager"],
     items: [
       { label: "Suppliers", href: "/purchasing/suppliers", icon: Truck },
       {
@@ -102,6 +106,7 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Reports",
     href: "/reports/sales",
     icon: TrendingUp,
+    roles: ["super_admin", "owner", "manager"],
   },
   {
     type: "section",
@@ -111,9 +116,9 @@ const NAV_ENTRIES: NavEntry[] = [
     roles: ["super_admin", "manager", "owner"],
     items: [
       { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["super_admin", "owner"] },
-      { label: "Branches", href: "/settings/branches", icon: Building2 },
-      { label: "Users", href: "/settings/users", icon: Users },
-      { label: "Categories", href: "/settings/categories", icon: Tag },
+      { label: "Branches", href: "/settings/branches", icon: Building2, roles: ["super_admin", "owner"] },
+      { label: "Users", href: "/settings/users", icon: Users, roles: ["super_admin", "owner"] },
+      { label: "Categories", href: "/settings/categories", icon: Tag, roles: ["owner", "manager"] },
     ],
   },
 ];
@@ -283,6 +288,15 @@ export function SidebarNav({ className, onNavigate }: SidebarNavProps) {
               entry.type === "section" &&
               role === "cashier" &&
               CASHIER_HIDDEN_SECTIONS.includes(entry.label)
+            ) {
+              return null;
+            }
+            // Hide sections restricted by role
+            if (
+              entry.type === "section" &&
+              entry.roles &&
+              role &&
+              !entry.roles.includes(role)
             ) {
               return null;
             }

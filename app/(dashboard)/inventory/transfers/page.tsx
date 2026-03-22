@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import type { Database, Branch, Product } from "@/types/database";
 import { TransfersClient, type TransferRow } from "./transfers-client";
 
@@ -43,7 +44,9 @@ export default async function TransfersPage() {
     notes: t.notes,
   }));
 
-  const isCashier = profileData?.role === 'cashier';
+  if (profileData?.role === 'cashier') redirect("/pos");
+
+  const isCashier = false;
 
   return (
     <TransfersClient

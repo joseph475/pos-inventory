@@ -1,13 +1,38 @@
+import { redirect } from 'next/navigation'
+import { auth } from '@clerk/nextjs/server'
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database'
 import { getAllUsers, getAllBranches } from '@/lib/actions/users'
 import { PendingUsersClient, UsersTableClient } from './assign-user-dialog'
 
 export const dynamic = 'force-dynamic'
 
+function getAdminClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
 export default async function UsersPage() {
+  const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
+
+  const supabase = getAdminClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!['super_admin', 'owner'].includes(profile?.role ?? '')) {
+    redirect('/dashboard')
+  }
+
   const [users, branches] = await Promise.all([getAllUsers(), getAllBranches()])
 
   // super_admins don't need a branch — only show non-super_admin users without a branch as pending
-  const pendingUsers = users.filter((u) => u.branch_id === null && u.role !== 'super_admin')
+  const pendingUsers = users.filter((u) => u.branch_id === null && u.role !== 'super_admin' && u.role !== 'owner')
   const allUsers = users
 
   return (

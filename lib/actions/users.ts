@@ -91,7 +91,21 @@ const getAllUsersCached = unstable_cache(
 export async function getAllUsers(): Promise<UserWithBranch[]> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
-  return getAllUsersCached()
+
+  const supabase = getAdminClient()
+  const { data: callerProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  const allUsers = await getAllUsersCached()
+
+  if (callerProfile?.role === 'owner') {
+    return allUsers.filter((u) => u.role !== 'super_admin')
+  }
+
+  return allUsers
 }
 
 const getAllBranchesCached = unstable_cache(
