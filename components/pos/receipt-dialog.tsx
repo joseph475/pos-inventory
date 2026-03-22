@@ -82,8 +82,6 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
         color: "#000",
         background: "#fff",
         width: "100%",
-        maxWidth: "340px",
-        margin: "0 auto",
         padding: "8px 0",
       }}
     >
@@ -174,7 +172,7 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <Printer className="h-5 w-5 text-primary" />
@@ -182,28 +180,9 @@ export function ReceiptDialog({ open, onOpenChange, data }: ReceiptDialogProps) 
             </DialogTitle>
           </DialogHeader>
 
-          {/* Scrollable receipt preview — mimics thermal paper slip */}
-          <div className="max-h-[60vh] overflow-y-auto rounded-lg bg-muted/40 p-4 flex flex-col items-center">
-            <div
-              className="overflow-hidden rounded-sm shadow-md"
-              style={{ width: "340px", background: "#fff" }}
-            >
-              {/* Torn-edge top */}
-              <div style={{
-                height: "8px",
-                background: "repeating-linear-gradient(90deg, #fff 0px, #fff 6px, #f0f0f0 6px, #f0f0f0 8px)",
-                borderBottom: "1px dashed #ccc",
-              }} />
-              <div style={{ padding: "4px 8px 4px" }}>
-                <ReceiptContent data={data} />
-              </div>
-              {/* Torn-edge bottom */}
-              <div style={{
-                height: "8px",
-                background: "repeating-linear-gradient(90deg, #fff 0px, #fff 6px, #f0f0f0 6px, #f0f0f0 8px)",
-                borderTop: "1px dashed #ccc",
-              }} />
-            </div>
+          {/* Receipt preview */}
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg border bg-white p-3">
+            <ReceiptContent data={data} />
           </div>
 
           <DialogFooter>
