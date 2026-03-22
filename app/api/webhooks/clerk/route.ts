@@ -2,6 +2,8 @@ import { Webhook } from 'svix'
 import { headers } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 
+const ORG_ID = '00000000-0000-0000-0000-000000000001'
+
 // Use service role client (no RLS). Typed via explicit insert/update objects.
 function getAdminClient() {
   return createClient(
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
         clerk_user_id: data.id,
         full_name: fullName,
         email: email,
-        org_id: 'default',
+        org_id: ORG_ID,
         role: 'cashier',
         branch_id: null,
       })
@@ -117,17 +119,26 @@ export async function POST(req: Request) {
       const fullName = buildFullName(data.first_name, data.last_name)
       const email = getPrimaryEmail(data.email_addresses, data.primary_email_address_id)
 
-      const { error } = await supabase
+      console.log(`[Webhook] user.updated received for ${data.id}`)
+      console.log(`[Webhook] Updating profile: full_name="${fullName}", email="${email}"`)
+
+      const { error, data: updateResult } = await supabase
         .from('profiles')
         .update({ full_name: fullName, email: email })
         .eq('clerk_user_id', data.id)
+        .select()
 
       if (error) {
-        console.error('Error updating profile:', error)
+        console.error('[Webhook] Error updating profile:', error)
         return new Response('Database error on user.updated', { status: 500 })
       }
 
-      console.log(`Profile updated for Clerk user: ${data.id}`)
+      if (!updateResult || updateResult.length === 0) {
+        console.warn(`[Webhook] No profile found for clerk_user_id: ${data.id}`)
+        return new Response('Profile not found', { status: 404 })
+      }
+
+      console.log(`[Webhook] Profile updated successfully for Clerk user: ${data.id}`, updateResult)
     }
   } catch (err) {
     console.error('Unexpected error handling webhook:', err)
