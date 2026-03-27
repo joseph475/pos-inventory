@@ -15,7 +15,7 @@ export default async function StockPage() {
   const supabase = getAdminClient();
 
   let userBranchId: string | null = null;
-  let userRole: "super_admin" | "manager" | "cashier" = "cashier";
+  let userRole: "owner" | "manager" | "cashier" = "cashier";
 
   if (userId) {
     const { data: profile } = await supabase

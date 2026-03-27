@@ -37,7 +37,7 @@ interface StockClientProps {
   initialRows: StockRow[];
   branches: Branch[];
   userBranchId?: string | null;
-  userRole?: "super_admin" | "manager" | "cashier";
+  userRole?: "owner" | "manager" | "cashier";
 }
 
 type StockStatus = "in_stock" | "low" | "out";
@@ -73,7 +73,7 @@ function StatusBadge({ qty, threshold }: { qty: number; threshold: number }) {
 
 export function StockClient({ initialRows, branches, userBranchId, userRole }: StockClientProps) {
   const defaultBranch =
-    userRole && userRole !== "super_admin" && userBranchId ? userBranchId : "all";
+    userRole && userRole !== "owner" && userBranchId ? userBranchId : "all";
   const [selectedBranch, setSelectedBranch] = React.useState(defaultBranch);
   const [search, setSearch] = React.useState("");
 

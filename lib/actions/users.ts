@@ -49,7 +49,7 @@ export async function getMyProfile(): Promise<{ profile: Profile | null; branch:
 export async function assignUserBranch(params: {
   profileId: string
   branchId: string | null
-  role: 'super_admin' | 'manager' | 'owner' | 'cashier'
+  role: 'owner' | 'manager' | 'cashier'
 }): Promise<void> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
@@ -64,13 +64,13 @@ export async function assignUserBranch(params: {
   const { error } = await supabase
     .from('profiles')
     .update({
-      branch_id: params.role === 'super_admin' || params.role === 'owner' ? null : params.branchId,
+      branch_id: params.role === 'owner' ? null : params.branchId,
       role: params.role,
     })
     .eq('id', params.profileId)
 
   if (error) throw new Error(error.message)
-  revalidateTag(CACHE_TAGS.USERS, {})
+  revalidateTag(CACHE_TAGS.USERS)
   revalidatePath('/settings/users')
 }
 
@@ -92,20 +92,7 @@ export async function getAllUsers(): Promise<UserWithBranch[]> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
 
-  const supabase = getAdminClient()
-  const { data: callerProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('clerk_user_id', userId)
-    .single()
-
-  const allUsers = await getAllUsersCached()
-
-  if (callerProfile?.role === 'owner') {
-    return allUsers.filter((u) => u.role !== 'super_admin')
-  }
-
-  return allUsers
+  return getAllUsersCached()
 }
 
 const getAllBranchesCached = unstable_cache(
@@ -161,6 +148,6 @@ export async function upsertBranch(params: {
       })
     if (error) throw new Error(error.message)
   }
-  revalidateTag(CACHE_TAGS.BRANCHES, {})
+  revalidateTag(CACHE_TAGS.BRANCHES)
   revalidatePath('/settings/branches')
 }

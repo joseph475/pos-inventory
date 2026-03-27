@@ -100,7 +100,7 @@ export function ZReportClient({
               type="date"
               value={date}
               onChange={(e) => handleDateChange(e.target.value)}
-              className="h-9 w-40"
+              className="h-9 w-40 [color-scheme:dark]"
             />
           </div>
           <Button variant="outline" size="sm" onClick={() => window.print()} className="h-9">

@@ -23,12 +23,12 @@ export default async function BranchesPage() {
     .eq("clerk_user_id", userId)
     .single();
 
-  if (!["super_admin", "owner"].includes(profile?.role ?? "")) {
+  if (profile?.role !== "owner") {
     redirect("/dashboard");
   }
 
-  const canAddBranch = profile?.role === "super_admin";
-  const canEditBranch = profile?.role === "super_admin" || profile?.role === "owner";
+  const canAddBranch = true;
+  const canEditBranch = true;
 
   const { data } = await supabase
     .from("branches")

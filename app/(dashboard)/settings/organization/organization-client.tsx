@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Globe, Percent, QrCode, Receipt, ShieldCheck, Upload, X } from "lucide-react";
+import { Globe, KeyRound, Percent, QrCode, Receipt, ShieldCheck, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateOrgSettings, updateQRSettings, updateOwnerSettings, uploadQrImage } from "@/lib/actions/organization";
+import { updateOrgSettings, updateQRSettings, updateOwnerSettings, uploadQrImage, setManagerOverridePin } from "@/lib/actions/organization";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const CURRENCIES = [
   { code: "USD", locale: "en-US",  label: "USD — US Dollar ($)" },
@@ -50,6 +57,8 @@ interface OrganizationClientProps {
   initialReceiptHeader: string | null;
   initialReceiptFooter: string | null;
   initialMaxCashierDiscountPct: number;
+  initialHasManagerPin: boolean;
+  isOwner: boolean;
 }
 
 export function OrganizationClient({
@@ -60,11 +69,14 @@ export function OrganizationClient({
   initialReceiptHeader,
   initialReceiptFooter,
   initialMaxCashierDiscountPct,
+  initialHasManagerPin,
+  isOwner,
 }: OrganizationClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isQrPending, startQrTransition] = useTransition();
   const [isOwnerPending, startOwnerTransition] = useTransition();
+  const [isPinPending, startPinTransition] = useTransition();
 
   const [selectedCode, setSelectedCode] = React.useState(initialCurrencyCode);
   // Display as percentage string, e.g. 0.12 → "12"
@@ -85,6 +97,13 @@ export function OrganizationClient({
   const [maxDiscountInput, setMaxDiscountInput] = React.useState(
     String(initialMaxCashierDiscountPct)
   );
+
+  // Manager override PIN state
+  const [hasPin, setHasPin] = React.useState(initialHasManagerPin);
+  const [pinDialogOpen, setPinDialogOpen] = React.useState(false);
+  const [newPin, setNewPin] = React.useState("");
+  const [confirmPin, setConfirmPin] = React.useState("");
+  const [pinError, setPinError] = React.useState<string | null>(null);
 
   const selectedCurrency = CURRENCIES.find((c) => c.code === selectedCode) ?? CURRENCIES[0];
 
@@ -195,6 +214,47 @@ export function OrganizationClient({
     });
   }
 
+  function handlePinDialogClose() {
+    setPinDialogOpen(false);
+    setNewPin("");
+    setConfirmPin("");
+    setPinError(null);
+  }
+
+  function handleSetPin() {
+    if (!/^\d{4,6}$/.test(newPin)) {
+      setPinError("PIN must be 4–6 digits");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError("PINs do not match");
+      return;
+    }
+    setPinError(null);
+    startPinTransition(async () => {
+      try {
+        await setManagerOverridePin(newPin);
+        setHasPin(true);
+        handlePinDialogClose();
+        toast.success("Manager PIN saved");
+      } catch (err) {
+        setPinError(err instanceof Error ? err.message : "Failed to save PIN");
+      }
+    });
+  }
+
+  function handleClearPin() {
+    startPinTransition(async () => {
+      try {
+        await setManagerOverridePin("");
+        setHasPin(false);
+        toast.success("Manager PIN removed");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to remove PIN");
+      }
+    });
+  }
+
   return (
     <div className="p-6 max-w-2xl space-y-6">
       <div>
@@ -204,6 +264,7 @@ export function OrganizationClient({
         </p>
       </div>
 
+      {isOwner && <>
       {/* QR Payment Settings */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
@@ -412,7 +473,107 @@ export function OrganizationClient({
           {isOwnerPending ? "Saving…" : "Save Receipt & Discount Settings"}
         </Button>
       </div>
+      </>}
 
+      {/* Manager Override PIN */}
+      <Card>
+        <CardHeader className="border-b border-border pb-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Manager Override PIN</CardTitle>
+          </div>
+          <CardDescription className="text-xs mt-1">
+            Cashiers enter this PIN to void transactions at the POS without needing a manager account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              {hasPin ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-transparent bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+                  ●●●● Configured
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  Not configured
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {hasPin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-destructive text-xs"
+                  onClick={handleClearPin}
+                  disabled={isPinPending}
+                >
+                  {isPinPending ? "Removing…" : "Remove PIN"}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPinDialogOpen(true)}
+                disabled={isPinPending}
+              >
+                {hasPin ? "Change PIN" : "Set PIN"}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* PIN Dialog */}
+      <Dialog open={pinDialogOpen} onOpenChange={(o) => { if (!o) handlePinDialogClose(); else setPinDialogOpen(true); }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="text-base">{hasPin ? "Change Manager PIN" : "Set Manager PIN"}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="new-pin" className="text-sm font-medium">New PIN (4–6 digits)</label>
+              <Input
+                id="new-pin"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="e.g. 1234"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="confirm-pin" className="text-sm font-medium">Confirm PIN</label>
+              <Input
+                id="confirm-pin"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Repeat PIN"
+              />
+            </div>
+            {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+          </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" size="sm" onClick={handlePinDialogClose} disabled={isPinPending}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSetPin}
+              disabled={newPin.length < 4 || confirmPin.length < 4 || isPinPending}
+            >
+              {isPinPending ? "Saving…" : "Save PIN"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isOwner && <>
       {/* Currency */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
@@ -510,6 +671,7 @@ export function OrganizationClient({
           {isPending ? "Saving…" : "Save Changes"}
         </Button>
       </div>
+      </>}
     </div>
   );
 }

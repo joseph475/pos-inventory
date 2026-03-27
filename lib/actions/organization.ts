@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { auth } from '@clerk/nextjs/server'
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
+import { createHash } from 'crypto'
 import type { Database } from '@/types/database'
 import { CACHE_TAGS } from '@/lib/cache-tags'
 
@@ -20,7 +21,7 @@ const getOrgSettingsCached = unstable_cache(
     const supabase = getAdminClient()
     const { data } = await supabase
       .from('organizations')
-      .select('currency_code, currency_locale, tax_rate, gcash_qr_url, maya_qr_url, receipt_header, receipt_footer, max_cashier_discount_pct')
+      .select('currency_code, currency_locale, tax_rate, gcash_qr_url, maya_qr_url, receipt_header, receipt_footer, max_cashier_discount_pct, manager_override_pin')
       .eq('id', ORG_ID)
       .single()
     return data ?? {
@@ -32,6 +33,7 @@ const getOrgSettingsCached = unstable_cache(
       receipt_header: null,
       receipt_footer: null,
       max_cashier_discount_pct: 20,
+      manager_override_pin: null,
     }
   },
   ['org-settings'],
@@ -41,7 +43,10 @@ const getOrgSettingsCached = unstable_cache(
 export async function getOrgSettings() {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
-  return getOrgSettingsCached()
+  const raw = await getOrgSettingsCached()
+  // Never expose the PIN hash to the client — return a boolean indicator instead
+  const { manager_override_pin, ...rest } = raw
+  return { ...rest, has_manager_pin: manager_override_pin !== null }
 }
 
 export async function updateOrgSettings(settings: {
@@ -52,7 +57,7 @@ export async function updateOrgSettings(settings: {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
 
-  // Only super_admin may update currency/tax settings
+  // Only owner may update currency/tax settings
   const supabase = getAdminClient()
   const { data: profile } = await supabase
     .from('profiles')
@@ -60,7 +65,7 @@ export async function updateOrgSettings(settings: {
     .eq('clerk_user_id', userId)
     .single()
 
-  if (profile?.role !== 'super_admin') throw new Error('Forbidden')
+  if (profile?.role !== 'owner') throw new Error('Forbidden')
 
   const { error: updateError } = await supabase
     .from('organizations')
@@ -71,6 +76,58 @@ export async function updateOrgSettings(settings: {
 
   revalidateTag(CACHE_TAGS.ORG_SETTINGS, {})
   revalidatePath('/settings/organization')
+}
+
+function hashPin(pin: string): string {
+  return createHash('sha256').update(ORG_ID + pin).digest('hex')
+}
+
+export async function setManagerOverridePin(pin: string): Promise<void> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile || !['owner', 'manager'].includes(profile.role)) {
+    throw new Error('Forbidden')
+  }
+
+  // Empty string = clear the PIN
+  if (pin !== '' && (!/^\d{4,6}$/.test(pin))) {
+    throw new Error('PIN must be 4–6 digits')
+  }
+
+  const hashed = pin === '' ? null : hashPin(pin)
+
+  const { error } = await supabase
+    .from('organizations')
+    .update({ manager_override_pin: hashed })
+    .eq('id', ORG_ID)
+
+  if (error) throw new Error(error.message)
+
+  revalidateTag(CACHE_TAGS.ORG_SETTINGS, {})
+  revalidatePath('/settings/organization')
+}
+
+export async function verifyManagerOverridePin(pin: string): Promise<boolean> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+  const { data } = await supabase
+    .from('organizations')
+    .select('manager_override_pin')
+    .eq('id', ORG_ID)
+    .single()
+
+  if (!data?.manager_override_pin) return false
+  return hashPin(pin) === data.manager_override_pin
 }
 
 export async function updateQRSettings(settings: {
@@ -87,7 +144,7 @@ export async function updateQRSettings(settings: {
     .eq('clerk_user_id', userId)
     .single()
 
-  if (profile?.role !== 'super_admin' && profile?.role !== 'owner') throw new Error('Forbidden')
+  if (profile?.role !== 'owner') throw new Error('Forbidden')
 
   const { error: updateError } = await supabase
     .from('organizations')
@@ -112,7 +169,7 @@ export async function uploadQrImage(formData: FormData, type: 'gcash' | 'maya'):
     .eq('clerk_user_id', userId)
     .single()
 
-  if (profile?.role !== 'super_admin' && profile?.role !== 'owner') throw new Error('Forbidden')
+  if (profile?.role !== 'owner') throw new Error('Forbidden')
 
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) throw new Error('No file provided')

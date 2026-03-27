@@ -2,13 +2,12 @@
 
 import { clerkClient } from '@clerk/nextjs/server'
 
-type DemoRole = 'super_admin' | 'manager' | 'cashier' | 'owner'
+type DemoRole = 'owner' | 'manager' | 'cashier'
 
 const ROLE_EMAIL: Record<DemoRole, string | undefined> = {
-  super_admin: process.env.DEMO_SUPER_ADMIN_EMAIL,
+  owner: process.env.DEMO_OWNER_EMAIL,
   manager: process.env.DEMO_MANAGER_EMAIL,
   cashier: process.env.DEMO_CASHIER_EMAIL,
-  owner: process.env.DEMO_OWNER_EMAIL,
 }
 
 export async function getDemoSignInUrl(role: DemoRole): Promise<string> {

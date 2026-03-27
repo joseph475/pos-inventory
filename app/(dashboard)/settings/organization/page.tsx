@@ -23,7 +23,7 @@ export default async function OrganizationSettingsPage() {
     .eq("clerk_user_id", userId)
     .single();
 
-  if (profile?.role !== "owner") redirect("/dashboard");
+  if (!["owner", "manager"].includes(profile?.role ?? "")) redirect("/dashboard");
 
   const settings = await getOrgSettings();
 
@@ -36,6 +36,8 @@ export default async function OrganizationSettingsPage() {
       initialReceiptHeader={settings.receipt_header ?? null}
       initialReceiptFooter={settings.receipt_footer ?? null}
       initialMaxCashierDiscountPct={settings.max_cashier_discount_pct}
+      initialHasManagerPin={settings.has_manager_pin}
+      isOwner={profile?.role === "owner"}
     />
   );
 }

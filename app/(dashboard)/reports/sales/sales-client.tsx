@@ -12,7 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, ShoppingCart, CreditCard, Package } from "lucide-react";
+import { TrendingUp, ShoppingCart, CreditCard, Package, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +42,23 @@ const METHOD_CONFIG: Record<string, string> = {
   cash: "bg-emerald-500/15 text-emerald-500 border-transparent",
   split: "bg-violet-500/15 text-violet-500 border-transparent",
 };
+
+function downloadCSV(rows: Record<string, unknown>[], filename: string) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (v: unknown) => JSON.stringify(v ?? "");
+  const csv = [
+    headers.join(","),
+    ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ---------------------------------------------------------------------------
 // Custom tooltip — created via factory so formatCurrency is in scope
@@ -310,10 +327,33 @@ export default function SalesClient({ initialData, initialRange }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Transactions table */}
         <Card className="lg:col-span-2">
-          <CardHeader className="border-b border-border pb-3">
+          <CardHeader className="border-b border-border pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">
               Recent Transactions
             </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={loading || data.recentTransactions.length === 0}
+              onClick={() => {
+                downloadCSV(
+                  data.recentTransactions.map((t) => ({
+                    receipt_id: t.id,
+                    branch: t.branch,
+                    cashier: t.cashier,
+                    items: t.items,
+                    total: t.total,
+                    payment_method: t.method,
+                    time: t.time,
+                  })),
+                  `sales-report.csv`
+                );
+              }}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (

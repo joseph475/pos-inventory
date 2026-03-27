@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
 import { getTransactions } from "@/lib/actions/transactions"
+import { getOrgSettings } from "@/lib/actions/organization"
 import { TransactionsClient } from "./transactions-client"
 
 function getAdminClient() {
@@ -28,7 +29,10 @@ export default async function TransactionsPage() {
   const dateTo = new Date().toISOString().slice(0, 10)
   const dateFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-  const initialData = await getTransactions({ dateFrom, dateTo })
+  const [initialData, orgSettings] = await Promise.all([
+    getTransactions({ dateFrom, dateTo }),
+    getOrgSettings(),
+  ])
 
   return (
     <TransactionsClient
@@ -36,6 +40,13 @@ export default async function TransactionsPage() {
       initialDateFrom={dateFrom}
       initialDateTo={dateTo}
       userRole={profile?.role ?? "manager"}
+      orgSettings={{
+        tax_rate: orgSettings.tax_rate,
+        receipt_header: orgSettings.receipt_header ?? null,
+        receipt_footer: orgSettings.receipt_footer ?? null,
+        currency_code: orgSettings.currency_code,
+        currency_locale: orgSettings.currency_locale,
+      }}
     />
   )
 }

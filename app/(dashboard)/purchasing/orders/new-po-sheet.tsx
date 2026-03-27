@@ -63,7 +63,7 @@ interface Props {
   branches: Array<{ id: string; name: string }>
   products: Array<{ id: string; name: string; sku: string; cost_price: number }>
   userBranchId: string | null
-  userRole: "owner" | "super_admin" | "manager" | "cashier"
+  userRole: "owner" | "manager" | "cashier"
   onSuccess: () => void
 }
 

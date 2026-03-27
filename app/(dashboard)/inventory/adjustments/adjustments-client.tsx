@@ -141,14 +141,14 @@ export function AdjustmentsClient({ initialRows, products, branches, defaultBran
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="h-8 w-36 text-xs"
+                className="h-8 w-36 text-xs [color-scheme:dark]"
               />
               <span className="text-xs text-muted-foreground">–</span>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="h-8 w-36 text-xs"
+                className="h-8 w-36 text-xs [color-scheme:dark]"
               />
             </div>
 

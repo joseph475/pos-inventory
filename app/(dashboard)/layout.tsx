@@ -102,8 +102,8 @@ export default async function DashboardLayout({
       .single(),
   ]);
 
-  const isSuperAdmin = profile?.profile?.role === "super_admin";
-  const branchLabel = isSuperAdmin
+  const isOwner = profile?.profile?.role === "owner";
+  const branchLabel = isOwner
     ? "All Branches"
     : (profile?.branch?.name ?? "No Branch");
 

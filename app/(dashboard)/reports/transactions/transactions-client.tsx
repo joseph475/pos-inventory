@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { ChevronDown, ChevronRight, Ban } from "lucide-react"
+import { ChevronDown, ChevronRight, Ban, Download, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,6 +33,7 @@ import { Separator } from "@/components/ui/separator"
 import { getTransactions, voidTransaction, type TransactionSummary } from "@/lib/actions/transactions"
 import { useCurrency } from "@/lib/context/currency"
 import { cn } from "@/lib/utils"
+import { ReceiptDialog, type ReceiptData } from "@/components/pos/receipt-dialog"
 
 const PAYMENT_METHODS = [
   { value: "", label: "All methods" },
@@ -150,11 +151,37 @@ function VoidDialog({ transaction, onClose, onVoided }: VoidDialogProps) {
   )
 }
 
+type OrgSettingsForReceipt = {
+  tax_rate: number
+  receipt_header: string | null
+  receipt_footer: string | null
+  currency_code: string
+  currency_locale: string
+}
+
 interface TransactionsClientProps {
   initialData: TransactionSummary[]
   initialDateFrom: string
   initialDateTo: string
   userRole: string
+  orgSettings: OrgSettingsForReceipt
+}
+
+function downloadCSV(rows: Record<string, unknown>[], filename: string) {
+  if (rows.length === 0) return
+  const headers = Object.keys(rows[0])
+  const escape = (v: unknown) => JSON.stringify(v ?? "")
+  const csv = [
+    headers.join(","),
+    ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
+  ].join("\n")
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function TransactionsClient({
@@ -162,6 +189,7 @@ export function TransactionsClient({
   initialDateFrom,
   initialDateTo,
   userRole,
+  orgSettings,
 }: TransactionsClientProps) {
   const { formatCurrency } = useCurrency()
 
@@ -173,8 +201,58 @@ export function TransactionsClient({
   const [isPending, startTransition] = React.useTransition()
   const [expandedId, setExpandedId] = React.useState<string | null>(null)
   const [voidTarget, setVoidTarget] = React.useState<TransactionSummary | null>(null)
+  const [reprintTarget, setReprintTarget] = React.useState<TransactionSummary | null>(null)
+  const [reprintOpen, setReprintOpen] = React.useState(false)
 
-  const canVoid = userRole === "manager" || userRole === "super_admin" || userRole === "owner"
+  const canVoid = userRole === "manager" || userRole === "owner"
+
+  function buildReceiptData(tx: TransactionSummary): ReceiptData {
+    return {
+      transactionId: tx.id,
+      timestamp: new Date(tx.created_at),
+      branchName: tx.branch_name,
+      branchAddress: tx.branch_address,
+      branchPhone: tx.branch_phone,
+      cashierName: tx.cashier_name,
+      items: tx.items.map((item) => ({
+        name: item.product_name,
+        qty: item.quantity,
+        unitPrice: item.unit_price,
+        discountAmount: item.discount_amount,
+        lineTotal: item.total,
+      })),
+      subtotal: tx.total - (tx.total * orgSettings.tax_rate / (1 + orgSettings.tax_rate)),
+      discountAmount: tx.discount_amount,
+      taxAmount: tx.total * orgSettings.tax_rate / (1 + orgSettings.tax_rate),
+      taxRate: orgSettings.tax_rate,
+      total: tx.total,
+      paymentMethod: tx.payment_method as ReceiptData["paymentMethod"],
+      receiptHeader: orgSettings.receipt_header ?? undefined,
+      receiptFooter: orgSettings.receipt_footer ?? undefined,
+      formatCurrency,
+    }
+  }
+
+  function handleReprint(tx: TransactionSummary) {
+    setReprintTarget(tx)
+    setReprintOpen(true)
+  }
+
+  function handleExportCSV() {
+    const rows = data.map((tx) => ({
+      date: new Date(tx.created_at).toLocaleDateString(),
+      time: new Date(tx.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      receipt_id: tx.id.slice(0, 8).toUpperCase(),
+      cashier: tx.cashier_name,
+      branch: tx.branch_name,
+      payment_method: tx.payment_method,
+      items: tx.item_count,
+      total: tx.total,
+      status: tx.status,
+      void_reason: tx.void_reason ?? "",
+    }))
+    downloadCSV(rows, `transactions-${dateFrom}-to-${dateTo}.csv`)
+  }
 
   function applyFilters(from: string, to: string, payment: string, status: string) {
     startTransition(async () => {
@@ -238,7 +316,7 @@ export function TransactionsClient({
             type="date"
             value={dateFrom}
             onChange={(e) => handleDateFromChange(e.target.value)}
-            className="h-9 w-40"
+            className="h-9 w-40 [color-scheme:dark]"
           />
         </div>
         <div className="space-y-1">
@@ -248,7 +326,7 @@ export function TransactionsClient({
             type="date"
             value={dateTo}
             onChange={(e) => handleDateToChange(e.target.value)}
-            className="h-9 w-40"
+            className="h-9 w-40 [color-scheme:dark]"
           />
         </div>
         <div className="space-y-1">
@@ -284,6 +362,17 @@ export function TransactionsClient({
         {isPending && (
           <span className="text-xs text-muted-foreground pb-2">Loading…</span>
         )}
+        <div className="ml-auto pb-0.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            disabled={data.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1.5" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -298,13 +387,13 @@ export function TransactionsClient({
               <TableHead>Payment</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Status</TableHead>
-              {canVoid && <TableHead className="w-20"></TableHead>}
+              <TableHead className="w-24"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canVoid ? 8 : 7} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
                   No transactions found for the selected filters.
                 </TableCell>
               </TableRow>
@@ -333,9 +422,18 @@ export function TransactionsClient({
                       <TableCell className="text-sm capitalize">{tx.payment_method === "gcash" ? "GCash" : tx.payment_method === "maya" ? "Maya" : tx.payment_method}</TableCell>
                       <TableCell className="text-right text-sm font-medium">{formatCurrency(tx.total)}</TableCell>
                       <TableCell><StatusBadge status={tx.status} /></TableCell>
-                      {canVoid && (
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {tx.status === "completed" && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleReprint(tx)}
+                            title="Print receipt"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          {canVoid && tx.status === "completed" && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -345,14 +443,14 @@ export function TransactionsClient({
                               Void
                             </Button>
                           )}
-                        </TableCell>
-                      )}
+                        </div>
+                      </TableCell>
                     </TableRow>
 
                     {/* Expanded item details */}
                     {isExpanded && (
                       <TableRow className="bg-muted/10 hover:bg-muted/10">
-                        <TableCell colSpan={canVoid ? 8 : 7} className="px-8 py-3">
+                        <TableCell colSpan={8} className="px-8 py-3">
                           <div className="space-y-2">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Items</p>
                             <div className="space-y-1">
@@ -395,6 +493,17 @@ export function TransactionsClient({
         onClose={() => setVoidTarget(null)}
         onVoided={handleVoided}
       />
+
+      {reprintTarget && (
+        <ReceiptDialog
+          open={reprintOpen}
+          onOpenChange={(o) => {
+            setReprintOpen(o)
+            if (!o) setReprintTarget(null)
+          }}
+          data={buildReceiptData(reprintTarget)}
+        />
+      )}
     </div>
   )
 }

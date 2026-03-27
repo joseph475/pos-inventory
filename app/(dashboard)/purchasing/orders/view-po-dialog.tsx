@@ -29,7 +29,7 @@ const STATUS_CONFIG: Record<POStatus, { label: string; className: string }> = {
 
 interface Props {
   po: POWithRelations | null
-  userRole: "super_admin" | "manager" | "cashier" | "owner"
+  userRole: "owner" | "manager" | "cashier"
   onClose: () => void
   onReceive: (po: POWithRelations) => void
 }
@@ -39,7 +39,7 @@ export function ViewPODialog({ po, userRole, onClose, onReceive }: Props) {
   const { formatCurrency } = useCurrency()
   const [isPending, startTransition] = React.useTransition()
 
-  const canAct = userRole === "super_admin" || userRole === "manager"
+  const canAct = userRole === "owner" || userRole === "manager"
 
   function handleSubmit() {
     if (!po) return

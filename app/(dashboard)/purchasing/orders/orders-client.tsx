@@ -58,7 +58,7 @@ interface Props {
   branches: Array<{ id: string; name: string }>
   products: Array<{ id: string; name: string; sku: string; cost_price: number }>
   userBranchId: string | null
-  userRole: "super_admin" | "manager" | "cashier" | "owner"
+  userRole: "owner" | "manager" | "cashier"
   supplierNames: string[]
 }
 
@@ -172,7 +172,7 @@ export function OrdersClient({
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-36 h-8"
+                  className="w-36 h-8 [color-scheme:dark]"
                 />
               </div>
               <span className="text-muted-foreground text-sm mb-1.5">–</span>
@@ -182,7 +182,7 @@ export function OrdersClient({
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="w-36 h-8"
+                  className="w-36 h-8 [color-scheme:dark]"
                 />
               </div>
             </div>

@@ -135,7 +135,7 @@ export async function createTransaction(params: {
   return { id: transaction.id }
 }
 
-export async function voidTransaction(id: string, reason: string): Promise<void> {
+export async function voidTransaction(id: string, reason: string, managerPin?: string): Promise<void> {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
 
@@ -147,7 +147,18 @@ export async function voidTransaction(id: string, reason: string): Promise<void>
     .single()
 
   if (!profile) throw new Error('Profile not found')
-  if (!['manager', 'super_admin', 'owner'].includes(profile.role)) throw new Error('Forbidden')
+
+  const isCashier = profile.role === 'cashier'
+  const isManager = ['manager', 'owner'].includes(profile.role)
+
+  if (!isCashier && !isManager) throw new Error('Forbidden')
+
+  if (isCashier) {
+    if (!managerPin) throw new Error('Manager PIN required')
+    const { verifyManagerOverridePin } = await import('./organization')
+    const valid = await verifyManagerOverridePin(managerPin)
+    if (!valid) throw new Error('Invalid manager PIN')
+  }
 
   // Get the transaction
   const { data: tx } = await supabase
@@ -216,6 +227,10 @@ export async function voidTransaction(id: string, reason: string): Promise<void>
 export type TransactionSummary = {
   id: string
   created_at: string
+  branch_id: string
+  branch_name: string
+  branch_address: string | null
+  branch_phone: string | null
   cashier_name: string
   item_count: number
   payment_method: string
@@ -250,13 +265,13 @@ export async function getTransactions(filters: {
     .eq('clerk_user_id', userId)
     .single()
 
-  if (!profile || !['manager', 'super_admin', 'owner'].includes(profile.role)) {
+  if (!profile || !['manager', 'owner'].includes(profile.role)) {
     throw new Error('Forbidden')
   }
 
   let query = supabase
     .from('transactions')
-    .select('id, created_at, cashier_id, payment_method, total, discount_amount, status, void_reason')
+    .select('id, created_at, branch_id, cashier_id, payment_method, total, discount_amount, status, void_reason')
     .gte('created_at', filters.dateFrom)
     .lte('created_at', filters.dateTo + 'T23:59:59.999Z')
     .order('created_at', { ascending: false })
@@ -288,7 +303,102 @@ export async function getTransactions(filters: {
     for (const p of profileRows ?? []) cashierMap.set(p.id, p.full_name)
   }
 
+  // Get branch info
+  const branchIds = [...new Set(transactions.map((t) => t.branch_id as string))]
+  const branchMap = new Map<string, { name: string; address: string | null; phone: string | null }>()
+  if (branchIds.length > 0) {
+    const { data: branchRows } = await supabase
+      .from('branches')
+      .select('id, name, address, phone')
+      .in('id', branchIds)
+    for (const b of (branchRows ?? []) as any[]) {
+      branchMap.set(b.id, { name: b.name, address: b.address, phone: b.phone })
+    }
+  }
+
   // Get items for all transactions
+  const txnIds = transactions.map((t) => t.id as string)
+  const itemsMap = new Map<string, TransactionSummary['items']>()
+  if (txnIds.length > 0) {
+    const { data: allItems } = await supabase
+      .from('transaction_items')
+      .select('id, transaction_id, product_name, quantity, unit_price, discount_amount, total')
+      .in('transaction_id', txnIds)
+    for (const item of (allItems ?? []) as any[]) {
+      if (!itemsMap.has(item.transaction_id)) itemsMap.set(item.transaction_id, [])
+      itemsMap.get(item.transaction_id)!.push({
+        id: item.id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_amount: item.discount_amount,
+        total: item.total,
+      })
+    }
+  }
+
+  return transactions.map((tx) => {
+    const items = itemsMap.get(tx.id) ?? []
+    const item_count = items.reduce((s, i) => s + i.quantity, 0)
+    const branch = branchMap.get(tx.branch_id)
+    return {
+      id: tx.id,
+      created_at: tx.created_at,
+      branch_id: tx.branch_id,
+      branch_name: branch?.name ?? 'Unknown',
+      branch_address: branch?.address ?? null,
+      branch_phone: branch?.phone ?? null,
+      cashier_name: cashierMap.get(tx.cashier_id) ?? 'Unknown',
+      item_count,
+      payment_method: tx.payment_method,
+      total: tx.total,
+      discount_amount: tx.discount_amount,
+      status: tx.status,
+      void_reason: tx.void_reason,
+      items,
+    }
+  })
+}
+
+export async function getRecentBranchTransactions(branchId: string, date: string): Promise<TransactionSummary[]> {
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const supabase = getAdminClient()
+
+  const { data: txns, error } = await supabase
+    .from('transactions')
+    .select('id, created_at, branch_id, cashier_id, payment_method, total, discount_amount, status, void_reason')
+    .eq('branch_id', branchId)
+    .in('status', ['completed', 'voided'])
+    .gte('created_at', `${date}T00:00:00.000Z`)
+    .lte('created_at', `${date}T23:59:59.999Z`)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+
+  const transactions = (txns ?? []) as any[]
+
+  // Get cashier names
+  const cashierIds = [...new Set(transactions.map((t) => t.cashier_id as string))]
+  const cashierMap = new Map<string, string>()
+  if (cashierIds.length > 0) {
+    const { data: profileRows } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', cashierIds)
+    for (const p of profileRows ?? []) cashierMap.set(p.id, p.full_name)
+  }
+
+  // Get branch info
+  const { data: branchRow } = await supabase
+    .from('branches')
+    .select('id, name, address, phone')
+    .eq('id', branchId)
+    .single()
+  const branch = branchRow as { id: string; name: string; address: string | null; phone: string | null } | null
+
+  // Get items
   const txnIds = transactions.map((t) => t.id as string)
   const itemsMap = new Map<string, TransactionSummary['items']>()
   if (txnIds.length > 0) {
@@ -315,6 +425,10 @@ export async function getTransactions(filters: {
     return {
       id: tx.id,
       created_at: tx.created_at,
+      branch_id: tx.branch_id,
+      branch_name: branch?.name ?? 'Unknown',
+      branch_address: branch?.address ?? null,
+      branch_phone: branch?.phone ?? null,
       cashier_name: cashierMap.get(tx.cashier_id) ?? 'Unknown',
       item_count,
       payment_method: tx.payment_method,

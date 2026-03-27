@@ -30,6 +30,7 @@ import { useCurrency } from "@/lib/context/currency"
 import { PaymentDialog } from "@/components/pos/payment-dialog"
 import { HoldOrderDialog } from "@/components/pos/hold-order-dialog"
 import { HeldOrdersSheet } from "@/components/pos/held-orders-sheet"
+import { RecentSalesSheet } from "@/components/pos/recent-sales-sheet"
 import type { POSProduct } from "@/lib/actions/inventory"
 import { cn } from "@/lib/utils"
 
@@ -79,6 +80,7 @@ export function POSClient({
   maxCashierDiscountPct,
   receiptHeader,
   receiptFooter,
+  hasPinConfigured,
 }: {
   initialProducts: POSProduct[]
   userRole: string
@@ -87,6 +89,7 @@ export function POSClient({
   maxCashierDiscountPct: number
   receiptHeader?: string | null
   receiptFooter?: string | null
+  hasPinConfigured?: boolean
 }) {
   const { formatCurrency, taxRate } = useCurrency()
 
@@ -119,6 +122,7 @@ export function POSClient({
 
   // Held orders sheet controlled state (for keyboard shortcut)
   const [heldOrdersOpen, setHeldOrdersOpen] = React.useState(false)
+  const [recentSalesOpen, setRecentSalesOpen] = React.useState(false)
 
   // Item-level discount UI
   const [itemDiscountTarget, setItemDiscountTarget] = React.useState<string | null>(null)
@@ -586,6 +590,11 @@ export function POSClient({
                 />
               </div>
               <HeldOrdersSheet open={heldOrdersOpen} onOpenChange={setHeldOrdersOpen} />
+              <RecentSalesSheet
+                open={recentSalesOpen}
+                onOpenChange={setRecentSalesOpen}
+                hasPinConfigured={hasPinConfigured ?? false}
+              />
             </div>
           </div>
 

@@ -55,7 +55,7 @@ export function AssignUserDialog({
 
   function handleSave() {
     if (!user) return
-    if (role !== 'super_admin' && !branchId) {
+    if (role !== 'owner' && !branchId) {
       setError('Please select a branch.')
       return
     }
@@ -104,15 +104,15 @@ export function AssignUserDialog({
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="cashier">Cashier</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Branch select — hidden for super_admin */}
-            {role !== 'super_admin' && (
+            {/* Branch select — hidden for owner */}
+            {role !== 'owner' && (
               <div className="space-y-1.5">
                 <Label htmlFor="branch-select">Branch</Label>
                 <Select value={branchId} onValueChange={(v) => { if (v) setBranchId(v) }}>
@@ -132,9 +132,9 @@ export function AssignUserDialog({
               </div>
             )}
 
-            {role === 'super_admin' && (
+            {role === 'owner' && (
               <p className="text-xs text-muted-foreground rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-                Super admins have access to all branches and do not require a branch assignment.
+                Owners have access to all branches and do not require a branch assignment.
               </p>
             )}
 
@@ -184,21 +184,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Avatar,
-  AvatarFallback,
-} from '@/components/ui/avatar'
+
 import { Card, CardContent } from '@/components/ui/card'
 import { MoreHorizontal, Pencil, UserCheck, UserMinus } from 'lucide-react'
 import type { UserWithBranch } from '@/lib/actions/users'
 
-const ROLE_CONFIG: Record<
-  Profile['role'],
-  { label: string; className: string }
-> = {
+const ROLE_CONFIG: Record<string, { label: string; className: string }> = {
+  owner: {
+    label: 'Owner',
+    className: 'bg-amber-500/15 text-amber-500 border-transparent',
+  },
   super_admin: {
-    label: 'Super Admin',
-    className: 'bg-violet-500/15 text-violet-500 border-transparent',
+    label: 'Owner',
+    className: 'bg-amber-500/15 text-amber-500 border-transparent',
   },
   manager: {
     label: 'Manager',
@@ -207,10 +205,6 @@ const ROLE_CONFIG: Record<
   cashier: {
     label: 'Cashier',
     className: 'bg-emerald-500/15 text-emerald-500 border-transparent',
-  },
-  owner: {
-    label: 'Owner',
-    className: 'bg-amber-500/15 text-amber-500 border-transparent',
   },
 }
 
@@ -272,11 +266,9 @@ export function UsersTableClient({ users, branches }: UsersTableClientProps) {
                 return (
                   <TableRow key={user.id} className="border-b border-border/50">
                     <TableCell className="pl-4">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium">
-                          {getInitials(user.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-xs font-medium shrink-0">
+                        {getInitials(user.full_name)}
+                      </div>
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
                       {user.full_name}
@@ -379,11 +371,9 @@ export function PendingUsersClient({ users, branches }: PendingUsersClientProps)
               className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 flex items-start justify-between gap-3"
             >
               <div className="flex items-start gap-3 min-w-0">
-                <Avatar className="h-9 w-9 shrink-0">
-                  <AvatarFallback className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-semibold">
-                    {getInitials(user.full_name)}
-                  </AvatarFallback>
-                </Avatar>
+                <div className="h-9 w-9 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-600 dark:text-amber-400 text-xs font-semibold shrink-0">
+                  {getInitials(user.full_name)}
+                </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
                     {user.full_name}

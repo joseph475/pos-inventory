@@ -19,6 +19,7 @@ export type Database = {
           receipt_header: string | null;
           receipt_footer: string | null;
           max_cashier_discount_pct: number;
+          manager_override_pin: string | null;
           created_at: string;
         };
         Insert: {
@@ -32,6 +33,7 @@ export type Database = {
           receipt_header?: string | null;
           receipt_footer?: string | null;
           max_cashier_discount_pct?: number;
+          manager_override_pin?: string | null;
           created_at?: string;
         };
         Update: {
@@ -45,6 +47,7 @@ export type Database = {
           receipt_header?: string | null;
           receipt_footer?: string | null;
           max_cashier_discount_pct?: number;
+          manager_override_pin?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -88,7 +91,7 @@ export type Database = {
           clerk_user_id: string;
           org_id: string;
           branch_id: string | null;
-          role: "super_admin" | "manager" | "owner" | "cashier";
+          role: "owner" | "manager" | "cashier";
           full_name: string;
           email: string;
           created_at: string;
@@ -98,7 +101,7 @@ export type Database = {
           clerk_user_id: string;
           org_id: string;
           branch_id?: string | null;
-          role: "super_admin" | "manager" | "owner" | "cashier";
+          role: "owner" | "manager" | "cashier";
           full_name: string;
           email: string;
           created_at?: string;
@@ -108,7 +111,7 @@ export type Database = {
           clerk_user_id?: string;
           org_id?: string;
           branch_id?: string | null;
-          role?: "super_admin" | "manager" | "owner" | "cashier";
+          role?: "owner" | "manager" | "cashier";
           full_name?: string;
           email?: string;
           created_at?: string;

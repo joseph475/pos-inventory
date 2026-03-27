@@ -57,7 +57,7 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["super_admin", "owner", "manager"],
+    roles: ["owner", "manager"],
   },
   {
     type: "link",
@@ -108,7 +108,7 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Reports",
     icon: TrendingUp,
     defaultOpen: false,
-    roles: ["super_admin", "owner", "manager"],
+    roles: ["owner", "manager"],
     items: [
       { label: "Sales", href: "/reports/sales", icon: BarChart3 },
       { label: "Transaction History", href: "/reports/transactions", icon: History },
@@ -120,11 +120,11 @@ const NAV_ENTRIES: NavEntry[] = [
     label: "Settings",
     icon: SlidersHorizontal,
     defaultOpen: false,
-    roles: ["super_admin", "manager", "owner"],
+    roles: ["owner", "manager"],
     items: [
-      { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["owner"] },
-      { label: "Branches", href: "/settings/branches", icon: Building2, roles: ["super_admin", "owner"] },
-      { label: "Users", href: "/settings/users", icon: Users, roles: ["super_admin", "owner"] },
+      { label: "Organization", href: "/settings/organization", icon: Settings2, roles: ["owner", "manager"] },
+      { label: "Branches", href: "/settings/branches", icon: Building2, roles: ["owner"] },
+      { label: "Users", href: "/settings/users", icon: Users, roles: ["owner"] },
       { label: "Categories", href: "/settings/categories", icon: Tag, roles: ["owner", "manager"] },
     ],
   },
@@ -257,7 +257,7 @@ export function SidebarNav({ className, onNavigate }: SidebarNavProps) {
 
       {/* Branch badge */}
       <div className="border-b border-sidebar-border px-3 py-3">
-        {role === "super_admin" || role === "owner" ? (
+        {role === "owner" ? (
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
             <Building2 className="h-4 w-4 shrink-0 text-sidebar-foreground/60" />
             <span className="flex-1 text-left text-sidebar-foreground/80 text-sm font-medium truncate">

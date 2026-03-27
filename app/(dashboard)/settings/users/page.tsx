@@ -25,14 +25,14 @@ export default async function UsersPage() {
     .eq('clerk_user_id', userId)
     .single()
 
-  if (!['super_admin', 'owner'].includes(profile?.role ?? '')) {
+  if (profile?.role !== 'owner') {
     redirect('/dashboard')
   }
 
   const [users, branches] = await Promise.all([getAllUsers(), getAllBranches()])
 
-  // super_admins don't need a branch — only show non-super_admin users without a branch as pending
-  const pendingUsers = users.filter((u) => u.branch_id === null && u.role !== 'super_admin' && u.role !== 'owner')
+  // owners don't need a branch — only show non-owner users without a branch as pending
+  const pendingUsers = users.filter((u) => u.branch_id === null && u.role !== 'owner')
   const allUsers = users
 
   return (

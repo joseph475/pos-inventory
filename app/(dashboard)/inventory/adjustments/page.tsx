@@ -25,8 +25,8 @@ export default async function AdjustmentsPage() {
       .eq("clerk_user_id", userId)
       .single()
 
-    if (profile?.role === "super_admin" || profile?.role === "owner") {
-      // Super admin sees all branches and can pick
+    if (profile?.role === "owner") {
+      // Owner sees all branches and can pick
       const { data: allBranches } = await supabase
         .from("branches")
         .select("id, name")
