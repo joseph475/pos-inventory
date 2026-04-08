@@ -70,7 +70,7 @@ export async function assignUserBranch(params: {
     .eq('id', params.profileId)
 
   if (error) throw new Error(error.message)
-  revalidateTag(CACHE_TAGS.USERS)
+  revalidateTag(CACHE_TAGS.USERS, {})
   revalidatePath('/settings/users')
 }
 
@@ -148,6 +148,6 @@ export async function upsertBranch(params: {
       })
     if (error) throw new Error(error.message)
   }
-  revalidateTag(CACHE_TAGS.BRANCHES)
+  revalidateTag(CACHE_TAGS.BRANCHES, {})
   revalidatePath('/settings/branches')
 }
