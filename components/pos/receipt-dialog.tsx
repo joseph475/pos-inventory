@@ -120,15 +120,16 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
       <Divider char="-" />
 
       {/* Column headers */}
-      <ReceiptLine>{pad("Item", 28)}{pad("Qty", 6, "right")}{pad("Total", 8, "right")}</ReceiptLine>
+      <ReceiptLine>{pad("Item", 20)}{pad("Qty", 6, "right")}{pad("Price", 8, "right")}{pad("Total", 8, "right")}</ReceiptLine>
       <Divider char="-" />
 
       {/* Items */}
       {data.items.map((item, i) => (
         <React.Fragment key={i}>
           <ReceiptLine>
-            {pad(item.name.length > 22 ? item.name.slice(0, 21) + "…" : item.name, 28)}
+            {pad(item.name.length > 14 ? item.name.slice(0, 13) + "…" : item.name, 20)}
             {String(item.qty).padStart(6)}
+            {data.formatCurrency(item.unitPrice).padStart(8)}
             {data.formatCurrency(item.lineTotal).padStart(8)}
           </ReceiptLine>
           {item.discountAmount > 0 && (
